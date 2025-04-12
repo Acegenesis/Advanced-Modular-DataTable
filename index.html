@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="fr" class="">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Simple DataTable (Tailwind)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body>
+
+    <h1 class="text-2xl font-bold mb-4 text-gray-900">Test du Simple DataTable</h1>
+
+    <div id="myTableContainer"></div>
+
+    <script type="module" src="./dist/index.js"></script>
+
+    <!-- Initialiser la DataTable -->
+    <script>
+        let myDataTableInstance = null; // Rendre l'instance accessible
+
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log('DOM chargé, tentative d\'initialisation de DataTable...');
+            // Données de test
+            const testData = [
+                [1, 'Alice Fournier', 'alice.fournier@email.com', 'Développeuse', 'Paris', 30, 52000, 52000, 52000, '01 23 45 67 89'],
+                [2, 'Bob Martin', 'bob.martin@email.com', 'Designer', 'Lyon', 25, 48000, 48000, 48000, '02 34 56 78 90'],
+                [3, 'Charlie Dupont', 'charlie.dupont@email.com', 'Chef de projet', 'Marseille', 35, 65000, 65000, 65000, '03 45 67 89 01'],
+                [4, 'David Petit', 'david.petit@email.com', 'Testeur', 'Lille', 28, 42000, 42000, 42000, '04 56 78 90 12'],
+                [5, 'Eve Dubois', 'eve.dubois@email.com', 'Développeuse', 'Bordeaux', 32, 55000, 55000, 55000, '05 67 89 01 23'],
+                [6, 'Frank Moreau', 'frank.moreau@email.com', 'Designer', 'Nantes', 29, 49500, 49500, 49500, '06 78 90 12 34'],
+                [7, 'Grace Leroy', 'grace.leroy@email.com', 'Chef de projet', 'Strasbourg', 40, 70000, 70000, 70000, '07 89 01 23 45'],
+                [8, 'Heidi Simon', 'heidi.simon@email.com', 'Testeur', 'Toulouse', 22, 38000, 38000, 38000, '08 90 12 34 56'],
+                [9, 'Ivan Roux', 'ivan.roux@email.com', 'Développeur', 'Nice', 27, 51000, 51000, 51000, '09 01 23 45 67'],
+                [10, 'Judy Michel', 'judy.michel@email.com', 'Designer', 'Rennes', 31, 53000, 53000, 53000, '01 12 34 56 78'],
+                [11, 'Kevin Blanc', 'kevin.blanc@email.com', 'Chef de projet', 'Reims', 45, 75000, 75000, 75000, '02 23 45 67 89'],
+                [12, 'Laura Girard', 'laura.girard@email.com', 'Testeur', 'Le Havre', 26, 41000, 41000, 41000, '03 34 56 78 90']
+            ];
+            // Noms des colonnes avec les types et renderers
+            const testColumns = [
+                { title: 'ID', type: 'number', locale: 'en-US', sortable: true, searchable: false },
+                { title: 'Nom' },
+                { title: 'Email', type: 'mail' },
+                { title: 'Poste', sortable: false },
+                { title: 'Ville' },
+                {
+                    title: 'Âge',
+                    type: 'number',
+                    render: (age, row) => {
+                        const element = document.createElement('span');
+                        element.textContent = `${age} ans`;
+                        if (age >= 30) {
+                            element.classList.add('font-bold', 'text-red-700', 'dark:text-red-500');
+                        }
+                        return element;
+                    }
+                },
+                {
+                    title: 'Salaire (USD)',
+                    type: 'money',
+                    locale: 'en-US',
+                    currency: 'USD'
+                },
+                {
+                    title: 'Salaire (EUR)',
+                    type: 'money',
+                    locale: 'fr-FR',
+                    currency: 'EUR'
+                },
+                {
+                    title: 'Salaire (JPY)',
+                    type: 'money',
+                    locale: 'ja-JP',
+                    currency: 'JPY'
+                },
+                {
+                    title: 'Téléphone',
+                    type: 'tel',
+                    sortable: false,
+                    searchable: false
+                }
+            ];
+
+            if (typeof window.SimpleDataTable !== 'undefined') {
+                try {
+                    // Stocker l'instance lors de la création
+                    myDataTableInstance = new window.SimpleDataTable('myTableContainer', {
+                        columns: testColumns,
+                        data: testData,
+                        pagination: { enabled: true, rowsPerPage: 5 },
+                        sorting: { enabled: true },
+                        searching: { enabled: true, debounceTime: 300 },
+                        rowActions: [
+                            { label: 'Voir', actionId: 'view', className: 'text-blue-600 hover:text-blue-900' },
+                            { label: 'Modifier', actionId: 'edit' },
+                            { label: 'Supprimer', actionId: 'delete', className: 'text-red-600 hover:text-red-900' }
+                        ]
+                    });
+                    console.log('DataTable initialisée avec succès !');
+
+                    // --- Ajout des écouteurs d'événements --- 
+                    const tableContainer = document.getElementById('myTableContainer');
+                    if (tableContainer) {
+                        tableContainer.addEventListener('dt:pageChange', (event) => {
+                            console.log('Événement dt:pageChange reçu:', event.detail);
+                            // Exemple: Afficher l'info dans un autre élément
+                            // document.getElementById('info-pagination').textContent = 
+                            //    `Page actuelle: ${event.detail.currentPage}`;
+                        });
+
+                        tableContainer.addEventListener('dt:sortChange', (event) => {
+                            console.log('Événement dt:sortChange reçu:', event.detail);
+                            // Exemple: Sauvegarder l'état du tri
+                            // localStorage.setItem('tableSort', JSON.stringify(event.detail));
+                        });
+
+                        tableContainer.addEventListener('dt:search', (event) => {
+                            console.log('Événement dt:search reçu:', event.detail);
+                        });
+
+                        tableContainer.addEventListener('dt:renderComplete', (event) => {
+                            console.log('Événement dt:renderComplete reçu');
+                            // Exemple: Initialiser des tooltips ou autres plugins sur le contenu rendu
+                        });
+
+                        tableContainer.addEventListener('dt:actionClick', (event) => {
+                            const detail = event.detail;
+                            const action = detail.action;
+                            const rowData = detail.rowData;
+                            const targetButton = event.target; // Le bouton cliqué
+
+                            console.log(`Action cliquée: ${action}`, rowData);
+
+                            // Utilisation d'un switch pour clarifier les actions
+                            switch (action) {
+                                case 'view':
+                                    console.log(`Action VIEW pour ID: ${rowData[0]}`, rowData);
+                                    alert(`Affichage des détails pour ${rowData[1]} (ID: ${rowData[0]})`);
+                                    // TODO: Implémenter la logique d'affichage (ex: ouvrir une modale)
+                                    break;
+
+                                case 'edit':
+                                    console.log(`Action EDIT pour ID: ${rowData[0]}`, rowData);
+                                    alert(`Ouverture de l'édition pour ${rowData[1]} (ID: ${rowData[0]})`);
+                                    // TODO: Implémenter la logique d'édition (ex: ouvrir un formulaire pré-rempli)
+                                    break;
+
+                                case 'delete':
+                                    console.log(`Action DELETE pour ID: ${rowData[0]}`, rowData);
+                                    // Demander confirmation
+                                    if (confirm(`Voulez-vous vraiment supprimer la ligne pour ${rowData[1]} (ID: ${rowData[0]}) ?`)) {
+                                        // Appel de la nouvelle méthode publique deleteRowById sur l'instance dt
+                                        // Assurez-vous que 'dt' est bien votre variable contenant l'instance DataTable
+                                        const deleted = dt.deleteRowById(rowData[0]); // Utilise l'ID de la première colonne (index 0)
+                                        
+                                        if (deleted) {
+                                            console.log(`Ligne ID ${rowData[0]} supprimée avec succès via API.`);
+                                            // Plus besoin de manipuler le DOM manuellement ici, la méthode s'en charge.
+                                        } else {
+                                             console.warn(`La suppression via API a échoué pour l'ID ${rowData[0]}. La ligne n'a peut-être pas été trouvée.`);
+                                        }
+                                    } else {
+                                        console.log('Suppression annulée par l\'utilisateur.');
+                                    }
+                                    break;
+
+                                default:
+                                    console.warn(`Action inconnue: ${action}`);
+                                    alert(`Action non gérée: ${action}`);
+                            }
+                        });
+                        console.log('Écouteurs d\'événements DataTable ajoutés.');
+                    }
+                    // --- Fin Ajout des écouteurs --- 
+
+                } catch (error) {
+                    console.error('Erreur lors de l\'instanciation de DataTable:', error);
+                    document.getElementById('myTableContainer').textContent = 'Erreur lors de l\'instanciation de la DataTable.';
+                }
+            } else {
+                console.error('La classe SimpleDataTable n\'a pas été trouvée au moment de DOMContentLoaded.');
+                document.getElementById('myTableContainer').textContent = 'Erreur : SimpleDataTable non trouvée après chargement du DOM.';
+            }
+        });
+    </script>
+
+</body>
+</html> 
