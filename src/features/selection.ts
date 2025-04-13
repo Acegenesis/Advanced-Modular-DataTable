@@ -1,7 +1,8 @@
 import { DataTable } from "../core/DataTable";
 import { dispatchSelectionChangeEvent } from "../events/dispatcher";
-import { getFilteredData } from "./searching";
 import { sortDataIfEnabled } from "./sorting";
+import { applyFilters } from "./filtering";
+import { getCurrentPageData } from "./pagination";
 
 // --- Selection Feature ---
 
@@ -127,19 +128,17 @@ export function updateSelectAllCheckboxState(instance: DataTable): void {
 }
 
 /**
- * Gets the currently filtered and sorted data (client-side).
- * Used primarily for determining the state of "Select All".
- * @param instance The DataTable instance.
- * @returns The filtered and sorted data array.
+ * Gets the currently relevant data based on filters and sorting (client-side).
+ * Used for select-all logic and potentially external API access.
  */
 export function getCurrentFilteredSortedData(instance: DataTable): any[][] {
-     if (instance.isServerSide) {
-         console.warn('getCurrentFilteredSortedData en mode serveur retourne seulement la page actuelle.');
-          return [...instance.originalData]; // Returns current page data in server mode
-     }
-     const filteredData = getFilteredData(instance, [...instance.originalData]); 
-     const sortedData = sortDataIfEnabled(instance, filteredData);   
-     return sortedData;
+    if (instance.isServerSide) {
+        console.warn('getCurrentFilteredSortedData is client-side only and may return incomplete data in server-side mode.');
+        return instance.originalData; // Return current page data in server mode
+    }
+    const filteredData = applyFilters(instance, instance.originalData);
+    const sortedData = sortDataIfEnabled(instance, filteredData);
+    return sortedData;
 }
 
 /**

@@ -8,6 +8,11 @@ export interface ColumnDefinition {
     locale?: string; 
     currency?: string; 
     width?: string; // Nouvelle propriété optionnelle pour la largeur (ex: '150px', '20%')
+    // --- Options de filtrage par colonne ---
+    filterType?: 'text' | 'select'; // Ajouter 'number-range', 'date-range' plus tard
+    filterOptions?: string[] | { value: any; label: string }[]; // Pour filterType = 'select'
+    filterPlaceholder?: string; // Pour filterType = 'text'
+    filterOperators?: TextFilterOperator[]; // Opérateurs autorisés pour filterType = 'text'
 }
 
 // Interface pour les actions
@@ -31,7 +36,6 @@ export interface DataTableOptions {
     };
     sorting?: {
         enabled: boolean;
-        initialCriteria?: SortCriterion[]; // <-- Option pour le tri initial multiple
     };
     searching?: {
         enabled: boolean;
@@ -50,6 +54,10 @@ export interface DataTableOptions {
         csv?: CsvExportOptions | boolean; // Activer/configurer l'export CSV
         // excel?: boolean; // Option future pour Excel
     };
+    // Nouvelle option globale pour activer/désactiver les filtres de colonne
+    columnFiltering?: {
+        enabled: boolean;
+    };
 }
 
 // Options spécifiques à l'export CSV
@@ -61,16 +69,14 @@ export interface CsvExportOptions {
     bom?: boolean; // Optionnel: Ajouter un BOM (Byte Order Mark) pour UTF-8 ? (utile pour Excel)
 }
 
+// Opérateurs pour les filtres texte
+export type TextFilterOperator = 'contains' | 'equals' | 'startsWith' | 'endsWith';
+
+// État d'un filtre de colonne individuel
+export type ColumnFilterState = {
+    value: string | number | { value: any; label: string } | null;
+    operator?: TextFilterOperator; // Opérateur pour les filtres texte
+} | null;
+
 export type SortDirection = 'asc' | 'desc' | 'none';
-export type PaginationStyle = 'simple' | 'numbered' | 'numbered-jump';
-
-// Critère de tri unique
-export interface SortCriterion {
-    columnIndex: number;
-    direction: SortDirection;
-}
-
-// Structure de l'événement dt:sortChange
-export interface SortChangeEventDetail {
-    criteria: SortCriterion[];
-} 
+export type PaginationStyle = 'simple' | 'numbered' | 'numbered-jump'; 

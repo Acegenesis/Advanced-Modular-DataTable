@@ -1,7 +1,6 @@
-import { ColumnDefinition, DataTableOptions, RowAction, SortDirection, SortCriterion } from './types';
+import { ColumnDefinition, DataTableOptions, RowAction, SortDirection, ColumnFilterState, TextFilterOperator } from './types';
 import { dispatchEvent, dispatchPageChangeEvent, dispatchSelectionChangeEvent } from '../events/dispatcher';
 import { setData, addRow, deleteRowById, updateRowById } from '../data/dataManager';
-import { renderSearchInput, getFilteredData } from '../features/searching';
 import { sortDataIfEnabled, handleSortClick } from '../features/sorting';
 import { getCurrentPageData, renderPaginationControls } from '../features/pagination';
 import { 
@@ -25,7 +24,8 @@ export class DataTable {
     public currentPage: number = 1;
     public rowsPerPage: number = 10; 
     public totalRows: number = 0;
-    public sortCriteria: SortCriterion[] = [];
+    public sortColumnIndex: number | null = null;
+    public sortDirection: SortDirection = 'none';
     public originalData: any[][]; // Holds original data in client mode, or current page data in server mode
     public filterTerm: string = '';
     public debounceTimer: number | null = null;
@@ -36,6 +36,8 @@ export class DataTable {
     public selectAllCheckbox: HTMLInputElement | null = null;
     private isLoading: boolean = false;
     private loadingOverlayElement: HTMLElement | null = null;
+    public columnFilters: Map<number, ColumnFilterState> = new Map();
+    public focusedElementId: string | null = null;
 
     constructor(elementId: string, options: DataTableOptions) {
         const targetElement = document.getElementById(elementId);
@@ -82,13 +84,17 @@ export class DataTable {
         this.currentPage = 1;
 
         // --- Initial State --- 
-        if (this.options.sorting?.enabled && this.options.sorting.initialCriteria) {
-            this.sortCriteria = [...this.options.sorting.initialCriteria];
-        } else {
-            this.sortCriteria = [];
-        }
+        this.sortColumnIndex = null;
+        this.sortDirection = 'none';
         this.filterTerm = '';
         this.debounceTimer = null;
+
+        // --- Initialisation Filtres Colonne ---
+        if (options.columnFiltering?.enabled) {
+            this.columnFilters = new Map();
+            // Pré-initialiser avec null pour chaque colonne potentiellement filtrable?
+            // Ou laisser vide et remplir au fur et à mesure?
+        }
 
         // --- Initialisation Sélection --- 
         if (options.selection?.enabled) {
@@ -117,6 +123,26 @@ export class DataTable {
 
     // --- Core Rendering Logic --- 
     public render(): void {
+        const activeElement = document.activeElement as HTMLElement;
+        let currentFocusId: string | null = null;
+        if (activeElement && this.element.contains(activeElement)) {
+            currentFocusId = activeElement.id;
+            console.log(`[DataTable.render] Active element BEFORE render: ${currentFocusId || 'None'}`); // Log précis
+            const isFilterElement = currentFocusId?.startsWith('col-filter-');
+            const isGlobalSearch = activeElement.classList.contains('dt-global-search-input');
+
+            if (isFilterElement || isGlobalSearch) {
+                this.focusedElementId = currentFocusId;
+                console.log(`[DataTable.render] Memorizing focus ID: ${this.focusedElementId}`);
+            } else {
+                this.focusedElementId = null;
+            }
+        } else {
+             console.log('[DataTable.render] No active element found within table BEFORE render.');
+            this.focusedElementId = null;
+        }
+
+        // Appeler la fonction de rendu principale
         render(this);
     }
 
@@ -355,6 +381,59 @@ export class DataTable {
         this.isLoading = isLoading;
         if (this.loadingOverlayElement) {
             this.loadingOverlayElement.style.display = this.isLoading ? 'flex' : 'none';
+        }
+    }
+
+    /**
+     * Met à jour l'état d'un filtre de colonne.
+     * @param columnIndex Index de la colonne
+     * @param filterState Nouvel état du filtre (objet { value, operator } ou null)
+     */
+    public setColumnFilter(columnIndex: number, filterState: ColumnFilterState): void {
+        console.log(`setColumnFilter called for index ${columnIndex}`, filterState);
+        if (!this.options.columnFiltering?.enabled) return;
+
+        const currentFilter = this.columnFilters.get(columnIndex);
+
+        if (!filterState || filterState.value === null || filterState.value === '') {
+            // Si la nouvelle valeur est vide ou l'état est null, supprimer le filtre
+            if (this.columnFilters.has(columnIndex)) {
+                this.columnFilters.delete(columnIndex);
+            } else {
+                return; // Pas de changement si déjà vide
+            }
+        } else {
+            // Mettre à jour ou ajouter le filtre
+            // Assurer un opérateur par défaut si non fourni
+            const newFilterState: ColumnFilterState = {
+                value: filterState.value,
+                operator: filterState.operator || 'contains' // Défaut 'contains'
+            };
+
+            // Optimisation: vérifier si l'état a réellement changé
+            if (currentFilter && 
+                currentFilter.value === newFilterState.value && 
+                currentFilter.operator === newFilterState.operator) {
+                return; // Pas de changement
+            }
+            this.columnFilters.set(columnIndex, newFilterState);
+        }
+
+        this.currentPage = 1; // Retourner à la page 1
+
+        const allFiltersState: { [key: number]: ColumnFilterState } = {};
+        this.columnFilters.forEach((value, key) => {
+            allFiltersState[key] = value;
+        });
+        dispatchEvent(this, 'dt:filterChange', { 
+            columnIndex,
+            value: filterState?.value ?? null, // Envoyer la valeur brute
+            operator: filterState?.operator, // Envoyer l'opérateur
+            allFilters: allFiltersState 
+         });
+
+        if (!this.isServerSide) {
+            this.render(); 
         }
     }
 

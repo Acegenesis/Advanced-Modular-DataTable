@@ -1,6 +1,6 @@
 import { DataTable } from "../core/DataTable";
 import { dispatchEvent } from "../events/dispatcher";
-import { renderSearchInput, getFilteredData } from "../features/searching";
+import { renderSearchInput, applyFilters } from "../features/filtering";
 import { sortDataIfEnabled } from "../features/sorting";
 import { renderPaginationControls } from "../features/pagination";
 import { updateSelectAllCheckboxState } from "../features/selection";
@@ -16,6 +16,7 @@ import { exportToCSV } from "../features/exporting";
  * @param instance The DataTable instance.
  */
 export function render(instance: DataTable): void {
+    console.log('--- render() called ---'); // <-- Log
     // Garder une référence à l'overlay s'il existe
     const existingOverlay = instance.element.querySelector('.dt-loading-overlay') as HTMLElement | null;
 
@@ -38,7 +39,7 @@ export function render(instance: DataTable): void {
     // 1. Render Search Input (if enabled)
     let searchElement: HTMLElement | null = null;
     if (instance.options.searching?.enabled) {
-        searchElement = renderSearchInput(instance); // La fonction renvoie maintenant l'élément
+        searchElement = renderSearchInput(instance);
         toolbarContainer.appendChild(searchElement);
     }
 
@@ -66,17 +67,16 @@ export function render(instance: DataTable): void {
     }
 
     // 2. Data Preparation (Client-side only)
-    let dataToDisplay = instance.isServerSide 
-        ? [...instance.originalData] // Use current page data in server mode
-        : [...instance.originalData]; // Start with full data in client mode
+    let dataToDisplay = instance.isServerSide
+        ? [...instance.originalData]
+        : [...instance.originalData];
 
     if (!instance.isServerSide) {
-        const filteredData = getFilteredData(instance, dataToDisplay);
+        const filteredData = applyFilters(instance, dataToDisplay);
         const sortedData = sortDataIfEnabled(instance, filteredData);
-        dataToDisplay = sortedData; 
-        instance.totalRows = dataToDisplay.length; // Update total based on filtered/sorted data
-    } 
-    // In server mode, totalRows is already set from options or previous fetch
+        dataToDisplay = sortedData;
+        instance.totalRows = dataToDisplay.length;
+    }
 
     // 3. Render Table Structure
     const tableContainer = document.createElement('div');
@@ -111,5 +111,30 @@ export function render(instance: DataTable): void {
     // 7. S'assurer que l'overlay est le dernier élément (pour le z-index)
     if (existingOverlay) {
         instance.element.appendChild(existingOverlay);
+    }
+
+    // --- Restauration du focus ---
+    const elementIdToFocus = instance.focusedElementId;
+    if (elementIdToFocus) {
+        console.log(`[mainRenderer.render] Attempting to restore focus to ID: ${elementIdToFocus}`); // Log
+        const elementToFocus = instance.element.querySelector(`#${elementIdToFocus}`) as HTMLElement;
+        if (elementToFocus) {
+            console.log(`[mainRenderer.render] Element found:`, elementToFocus); // Log
+            // Retarder légèrement le focus
+            requestAnimationFrame(() => {
+                 console.log(`[mainRenderer.render] Calling .focus() on ${elementIdToFocus}`); // Log
+                elementToFocus.focus();
+                // Si c'est un input texte, placer le curseur à la fin
+                if (elementToFocus instanceof HTMLInputElement && elementToFocus.type === 'text') {
+                     console.log(`[mainRenderer.render] Setting cursor position for ${elementIdToFocus}`); // Log
+                    elementToFocus.setSelectionRange(elementToFocus.value.length, elementToFocus.value.length);
+                }
+            });
+        } else {
+             console.log(`[mainRenderer.render] Element with ID ${elementIdToFocus} NOT FOUND after render.`); // Log
+        }
+        instance.focusedElementId = null; // Réinitialiser après tentative
+    } else {
+         console.log('[mainRenderer.render] No focus ID was memorized.'); // Log
     }
 } 

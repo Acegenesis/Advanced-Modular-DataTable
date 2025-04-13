@@ -53,8 +53,20 @@
         // Définition des colonnes
         const columns = [
             { title: 'ID', type: 'number', sortable: true, width: '80px' },
-            { title: 'Nom', type: 'string', sortable: true, searchable: true },
-            { title: 'Prénom', type: 'string', searchable: true },
+            { 
+                title: 'Nom', 
+                type: 'string', 
+                sortable: true, 
+                searchable: true, 
+                filterType: 'text',
+                filterPlaceholder: 'Filtrer Nom...',
+                filterOperators: ['contains', 'startsWith', 'equals']
+            },
+            {
+                title: 'Prénom',
+                type: 'string',
+                searchable: true,
+            },
             { title: 'Email', type: 'mail', searchable: true, width: '250px' },
             { title: 'Téléphone', type: 'tel', searchable: false, width: '180px' },
             { title: 'Salaire', type: 'money', sortable: true, locale: 'fr-FR', currency: 'EUR', width: '150px' }
@@ -64,6 +76,9 @@
         const options = {
             columns: columns,
             data: data,
+            columnFiltering: { // <-- Activer les filtres de colonne
+                enabled: true
+            },
             pagination: {
                 enabled: true,
                 rowsPerPage: 5, // Afficher 5 lignes par page
