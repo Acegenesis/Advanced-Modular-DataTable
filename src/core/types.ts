@@ -24,6 +24,10 @@ export interface DataTableOptions {
     pagination?: {
         enabled: boolean;
         rowsPerPage?: number; 
+        style?: PaginationStyle;
+        previousButtonContent?: string; // Contenu HTML/texte pour le bouton Précédent
+        nextButtonContent?: string;     // Contenu HTML/texte pour le bouton Suivant
+        jumpButtonText?: string;        // Texte pour le bouton "Go" du saut de page
     };
     sorting?: {
         enabled: boolean;
@@ -43,4 +47,5 @@ export interface DataTableOptions {
     loadingMessage?: string; // Message à afficher pendant le chargement
 }
 
-export type SortDirection = 'asc' | 'desc' | 'none'; 
+export type SortDirection = 'asc' | 'desc' | 'none';
+export type PaginationStyle = 'simple' | 'numbered' | 'numbered-jump'; 

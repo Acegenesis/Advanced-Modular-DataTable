@@ -66,7 +66,11 @@
             data: data,
             pagination: {
                 enabled: true,
-                rowsPerPage: 5 // Afficher 5 lignes par page
+                rowsPerPage: 5, // Afficher 5 lignes par page
+                style: 'numbered', // Options: 'simple', 'numbered', 'numbered-jump'
+                previousButtonContent: '&larr; Préc.', // Personnalisation bouton Précédent
+                nextButtonContent: 'Suiv. &rarr;',     // Personnalisation bouton Suivant
+                jumpButtonText: 'OK'             // Personnalisation bouton Go
             },
             sorting: {
                 enabled: true
