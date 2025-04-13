@@ -57,6 +57,7 @@ export interface DataTableOptions {
     // Nouvelle option globale pour activer/désactiver les filtres de colonne
     columnFiltering?: {
         enabled: boolean;
+        showClearButton?: boolean; // Afficher un bouton "Effacer tous les filtres" ?
     };
 }
 
@@ -70,7 +71,14 @@ export interface CsvExportOptions {
 }
 
 // Opérateurs pour les filtres texte
-export type TextFilterOperator = 'contains' | 'equals' | 'startsWith' | 'endsWith';
+export type TextFilterOperator = 
+    'contains' | 
+    'notContains' |
+    'equals' | 
+    'startsWith' | 
+    'endsWith' | 
+    'isEmpty' |
+    'isNotEmpty';
 
 // État d'un filtre de colonne individuel
 export type ColumnFilterState = {

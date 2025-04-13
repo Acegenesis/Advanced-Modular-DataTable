@@ -32,37 +32,56 @@ export function render(instance: DataTable): void {
     // Optional: Add base classes to mainContainer if needed
     // mainContainer.className = 'datatable-wrapper';
 
-    // --- Barre d'outils supérieure (Recherche, Export, etc.) ---
+    // --- Barre d'outils supérieure (Recherche, Export, Effacer Filtres, etc.) ---
     const toolbarContainer = document.createElement('div');
-    toolbarContainer.className = 'mb-4 flex justify-between items-center'; // Ajoute un espace en dessous
+    toolbarContainer.className = 'mb-4 flex justify-between items-center flex-wrap gap-2'; // flex-wrap + gap pour petits écrans
 
-    // 1. Render Search Input (if enabled)
+    // Conteneur pour Recherche (gauche)
+    const leftToolbar = document.createElement('div');
+    leftToolbar.className = 'flex-grow'; // Prend l'espace disponible
     let searchElement: HTMLElement | null = null;
     if (instance.options.searching?.enabled) {
         searchElement = renderSearchInput(instance);
-        toolbarContainer.appendChild(searchElement);
+        leftToolbar.appendChild(searchElement);
     }
+    toolbarContainer.appendChild(leftToolbar);
 
-    // Espace flexible si la recherche est activée
-    if (searchElement) {
-         const spacer = document.createElement('div');
-         spacer.className = 'flex-grow'; // Pousse les éléments suivants à droite
-         toolbarContainer.appendChild(spacer);
+    // Conteneur pour Boutons (droite)
+    const rightToolbar = document.createElement('div');
+    rightToolbar.className = 'flex items-center flex-shrink-0 gap-2'; // Empêche de réduire + gap
+
+    // Bouton "Effacer tous les filtres" (si activé)
+    let clearFiltersButton: HTMLButtonElement | null = null;
+    if (instance.options.columnFiltering?.showClearButton) {
+        clearFiltersButton = document.createElement('button');
+        clearFiltersButton.textContent = 'Effacer Filtres';
+        clearFiltersButton.className = 'px-3 py-1.5 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50';
+        // Désactiver si aucun filtre n'est actif
+        clearFiltersButton.disabled = !instance.filterTerm && instance.columnFilters.size === 0;
+        clearFiltersButton.addEventListener('click', () => instance.clearAllFilters());
+        rightToolbar.appendChild(clearFiltersButton);
     }
 
     // Bouton d'export CSV (if enabled)
     let exportButton: HTMLButtonElement | null = null;
     if (instance.options.exporting?.csv) {
-        exportButton = document.createElement('button');
-        exportButton.textContent = 'Exporter CSV';
-        // Ajouter des classes Tailwind pour le style
-        exportButton.className = 'ml-3 px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500';
-        exportButton.addEventListener('click', () => exportToCSV(instance));
-        toolbarContainer.appendChild(exportButton);
+        const csvOptions = instance.options.exporting.csv;
+        if (csvOptions === true || (typeof csvOptions === 'object' && csvOptions.enabled !== false)) {
+            exportButton = document.createElement('button');
+            exportButton.textContent = 'Exporter CSV';
+            exportButton.className = 'px-3 py-1.5 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500';
+            exportButton.addEventListener('click', () => exportToCSV(instance));
+            rightToolbar.appendChild(exportButton);
+        }
+    }
+
+    // Ajouter le conteneur droit seulement s'il a des boutons
+    if (rightToolbar.hasChildNodes()) {
+        toolbarContainer.appendChild(rightToolbar);
     }
 
     // Ajouter le conteneur de la barre d'outils seulement s'il contient quelque chose
-    if (searchElement || exportButton) {
+    if (leftToolbar.hasChildNodes() || rightToolbar.hasChildNodes()) {
         mainContainer.appendChild(toolbarContainer);
     }
 

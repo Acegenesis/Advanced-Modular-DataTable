@@ -60,7 +60,7 @@
                 searchable: true, 
                 filterType: 'text',
                 filterPlaceholder: 'Filtrer Nom...',
-                filterOperators: ['contains', 'startsWith', 'equals']
+                filterOperators: ['contains', 'notContains', 'startsWith', 'equals', 'isEmpty', 'isNotEmpty']
             },
             {
                 title: 'Prénom',
@@ -77,7 +77,8 @@
             columns: columns,
             data: data,
             columnFiltering: { // <-- Activer les filtres de colonne
-                enabled: true
+                enabled: true,
+                showClearButton: true // <-- Afficher le bouton
             },
             pagination: {
                 enabled: true,

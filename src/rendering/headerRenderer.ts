@@ -49,9 +49,12 @@ function createAdvancedTextFilterPopup(instance: DataTable, columnIndex: number,
         option.value = op;
         const opTextMap: Record<TextFilterOperator, string> = {
             contains: 'Contient',
+            notContains: 'Ne contient pas',
             equals: 'Égal à',
             startsWith: 'Commence par',
-            endsWith: 'Finit par'
+            endsWith: 'Finit par',
+            isEmpty: 'Est vide',
+            isNotEmpty: 'N\'est pas vide'
         };
         option.textContent = opTextMap[op] || op;
         option.selected = op === currentOperator;
@@ -67,6 +70,24 @@ function createAdvancedTextFilterPopup(instance: DataTable, columnIndex: number,
     valueInput.value = currentValue;
     valueInput.setAttribute('aria-label', 'Valeur du filtre');
     popup.appendChild(valueInput);
+
+    // Fonction pour gérer la visibilité/état de l'input
+    const updateValueInputState = (operator: TextFilterOperator) => {
+        const requiresValue = operator !== 'isEmpty' && operator !== 'isNotEmpty';
+        valueInput.disabled = !requiresValue;
+        valueInput.style.display = requiresValue ? '' : 'none'; // Masquer si pas nécessaire
+        if (!requiresValue) {
+            valueInput.value = ''; // Effacer la valeur si pas nécessaire
+        }
+    };
+
+    // Mettre à jour l'état initial
+    updateValueInputState(currentOperator);
+
+    // Mettre à jour lors du changement d'opérateur
+    operatorSelect.addEventListener('change', () => {
+        updateValueInputState(operatorSelect.value as TextFilterOperator);
+    });
 
     // 3. Boutons d'action
     const buttonContainer = document.createElement('div');
@@ -87,7 +108,8 @@ function createAdvancedTextFilterPopup(instance: DataTable, columnIndex: number,
     applyButton.className = 'px-3 py-1 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500';
     applyButton.addEventListener('click', () => {
         const selectedOperator = operatorSelect.value as TextFilterOperator;
-        const enteredValue = valueInput.value;
+        // Lire la valeur seulement si nécessaire
+        const enteredValue = (selectedOperator !== 'isEmpty' && selectedOperator !== 'isNotEmpty') ? valueInput.value : ''; 
         instance.setColumnFilter(columnIndex, { value: enteredValue || null, operator: selectedOperator });
         closeActivePopup();
     });

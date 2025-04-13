@@ -100,28 +100,45 @@ export function applyFilters(instance: DataTable, data: any[][]): any[][] {
 
                 switch (columnDef.filterType) {
                     case 'text':
-                        const filterValueString = String(filterValue).trim().toLowerCase();
-                        if (filterValueString) {
+                        const cellDataForCheck = row[columnIndex]; // Garder la valeur originale pour check null/undefined
+                        const cellStringForCheck = String(cellDataForCheck).trim().toLowerCase();
+
+                        // La valeur du filtre n'est utilisée que si l'opérateur en a besoin
+                        const filterValueString = (filterOperator !== 'isEmpty' && filterOperator !== 'isNotEmpty') 
+                            ? String(filterValue).trim().toLowerCase() 
+                            : '';
+                        
+                        if (filterOperator === 'isEmpty' || filterOperator === 'isNotEmpty' || filterValueString) {
                             let match = false;
-                            console.log(`[applyFilters] Text Filter [Col ${columnIndex}]: Comparing '${cellDataString}' ${filterOperator} '${filterValueString}'`); // Log détaillé
+                            // console.log(`[applyFilters] Text Filter [Col ${columnIndex}]: Comparing Original='${cellDataForCheck}' (Str='${cellStringForCheck}') ${filterOperator} FilterVal='${filterValueString}'`);
                             switch (filterOperator) {
                                 case 'equals':
-                                    match = cellDataString === filterValueString;
+                                    match = cellStringForCheck === filterValueString;
                                     break;
                                 case 'startsWith':
-                                    match = cellDataString.startsWith(filterValueString);
+                                    match = cellStringForCheck.startsWith(filterValueString);
                                     break;
                                 case 'endsWith':
-                                    match = cellDataString.endsWith(filterValueString);
+                                    match = cellStringForCheck.endsWith(filterValueString);
+                                    break;
+                                case 'notContains':
+                                    match = !cellStringForCheck.includes(filterValueString);
+                                    break;
+                                case 'isEmpty':
+                                    // Vrai si null, undefined, ou chaîne vide après trim
+                                    match = cellDataForCheck == null || cellStringForCheck === ''; 
+                                    break;
+                                case 'isNotEmpty':
+                                     // Vrai si non null/undefined ET chaîne non vide après trim
+                                    match = cellDataForCheck != null && cellStringForCheck !== '';
                                     break;
                                 case 'contains':
                                 default:
-                                    match = cellDataString.includes(filterValueString);
+                                    match = cellStringForCheck.includes(filterValueString);
                                     break;
                             }
-                            console.log(`[applyFilters] Text Filter [Col ${columnIndex}]: Match result = ${match}`); // Log résultat
+                            // console.log(`[applyFilters] Text Filter [Col ${columnIndex}]: Match result = ${match}`);
                             if (!match) {
-                                // console.log(`[applyFilters] Row rejected by column ${columnIndex}`);
                                 return false;
                             }
                         }

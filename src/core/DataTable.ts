@@ -230,134 +230,6 @@ export class DataTable {
         return updateRowById(this, id, newRowData, idColumnIndex);
     }
 
-    // --- Nouvelles Méthodes de Gestion de la Sélection --- 
-
-    // private handleSelectAllClick(isChecked: boolean): void {
-    //     // Obtenir TOUTES les données filtrées/triées (pertinentes pour la sélection globale)
-    //     const allRelevantData = this.getCurrentFilteredSortedData(); 
-
-    //     // Mettre à jour l'état interne pour TOUTES les lignes pertinentes
-    //     allRelevantData.forEach(rowData => {
-    //         const rowId = rowData[0]; // Assumer ID en colonne 0
-    //         if (isChecked) {
-    //             this.selectedRowIds.add(rowId);
-    //         } else {
-    //             this.selectedRowIds.delete(rowId);
-    //         }
-    //     });
-
-    //     // --- Mettre à jour l'UI directement --- 
-    //     const tbody = this.element.querySelector(`#${this.element.id}-tbody`);
-    //     if (tbody) {
-    //         const rows = tbody.querySelectorAll('tr[role="row"]');
-    //         // On suppose que les lignes visibles dans le DOM correspondent à visibleRowsData
-    //         // C'est le cas après un rendu normal. 
-    //         rows.forEach((rowElement) => {
-    //             const checkbox = rowElement.querySelector('input[type="checkbox"]') as HTMLInputElement | null;
-    //             // Pour retrouver l'ID, on pourrait le stocker en data-attribute, 
-    //             // mais pour 'select all', on applique juste l'état global 'isChecked'.
-    //             if (checkbox) {
-    //                 checkbox.checked = isChecked;
-    //             }
-    //             if (isChecked) {
-    //                 rowElement.classList.add('dt-row-selected', 'bg-indigo-50');
-    //                 rowElement.setAttribute('aria-selected', 'true');
-    //             } else {
-    //                 rowElement.classList.remove('dt-row-selected', 'bg-indigo-50');
-    //                 rowElement.setAttribute('aria-selected', 'false');
-    //             }
-    //         });
-    //     }
-    //     // ------------------------------------
-
-    //     this.updateSelectAllCheckboxState(); // Mettre à jour l'état de la checkbox "select all"
-    //     dispatchSelectionChangeEvent(this);
-    // }
-
-    // private handleRowCheckboxClick(rowId: any, rowData: any[], isChecked: boolean, rowElement: HTMLTableRowElement): void {
-    //     if (isChecked) {
-    //         if (this.selectionMode === 'single') {
-    //             this.selectedRowIds.clear(); // Désélectionner les autres en mode single
-    //             // Update UI for previously selected rows if needed (more complex)
-    //             const previouslySelected = this.element.querySelectorAll('.dt-row-selected');
-    //             previouslySelected.forEach(prevRow => {
-    //                 prevRow.classList.remove('dt-row-selected', 'bg-indigo-50');
-    //                 prevRow.setAttribute('aria-selected', 'false');
-    //                 const prevCheckbox = prevRow.querySelector('input[type="checkbox"]') as HTMLInputElement | null;
-    //                 if (prevCheckbox) prevCheckbox.checked = false;
-    //             });
-    //         }
-    //         this.selectedRowIds.add(rowId);
-    //         rowElement.classList.add('dt-row-selected', 'bg-indigo-50');
-    //         rowElement.setAttribute('aria-selected', 'true');
-    //     } else {
-    //         this.selectedRowIds.delete(rowId);
-    //         rowElement.classList.remove('dt-row-selected', 'bg-indigo-50');
-    //         rowElement.setAttribute('aria-selected', 'false');
-    //     }
-
-    //     if (this.selectionMode === 'multiple') {
-    //         this.updateSelectAllCheckboxState(); // Mettre à jour l'état de la checkbox "select all"
-    //     }
-    //     dispatchSelectionChangeEvent(this);
-    // }
-
-    // // Met à jour l'état checked/indeterminate de la checkbox "select all"
-    // private updateSelectAllCheckboxState(): void {
-    //     if (!this.selectAllCheckbox || this.selectionMode === 'single') return;
-
-    //     // Baser l'état sur TOUTES les données filtrées/triées
-    //     const allRelevantData = this.getCurrentFilteredSortedData();
-
-    //     if (allRelevantData.length === 0) {
-    //         this.selectAllCheckbox.checked = false;
-    //         this.selectAllCheckbox.indeterminate = false;
-    //         return;
-    //     }
-
-    //     let allVisibleSelected = true; // Renommé conceptuellement mais garde le nom pour moins de diff
-    //     let someVisibleSelected = false; // Idem
-
-    //     // Vérifier l'état de sélection sur toutes les données pertinentes
-    //     for (const rowData of allRelevantData) { 
-    //         const rowId = rowData[0]; // Assumer ID en colonne 0
-    //         if (this.selectedRowIds.has(rowId)) {
-    //             someVisibleSelected = true;
-    //         } else {
-    //             allVisibleSelected = false;
-    //         }
-    //         // Early exit if we know the state
-    //         if (someVisibleSelected && !allVisibleSelected) break;
-    //     }
-
-    //     if (allVisibleSelected) {
-    //         this.selectAllCheckbox.checked = true;
-    //         this.selectAllCheckbox.indeterminate = false;
-    //     } else if (someVisibleSelected) {
-    //         this.selectAllCheckbox.checked = false;
-    //         this.selectAllCheckbox.indeterminate = true;
-    //     } else {
-    //         this.selectAllCheckbox.checked = false;
-    //         this.selectAllCheckbox.indeterminate = false;
-    //     }
-    // }
-
-    // // Récupère les données filtrées/triées courantes (client-side)
-    // private getCurrentFilteredSortedData(): any[][] {
-    //      if (this.isServerSide) {
-    //          // En mode serveur, on ne peut pas connaître toutes les données filtrées/triées
-    //          // 'Select All' devrait peut-être sélectionner uniquement la page visible?
-    //          // Ou alors on assume que `originalData` contient les données pertinentes pour la sélection ?
-    //          // Pour l'instant, on retourne la page actuelle, ce qui limite `Select All` à la page visible en server-side.
-    //          // Alternative: Renvoyer un état spécial ou désactiver `Select All` en server-side?
-    //          console.warn('getCurrentFilteredSortedData en mode serveur retourne seulement la page actuelle.');
-    //           return [...this.originalData]; // Retourne juste la page actuelle
-    //      }
-    //      const filteredData = getFilteredData(this, [...this.originalData]); 
-    //      const sortedData = sortDataIfEnabled(this, filteredData);   
-    //      return sortedData;
-    // }
-
     // Récupère les données complètes des lignes sélectionnées
     public getSelectedRowData(): any[][] {
         return getSelectedRowData(this);
@@ -390,50 +262,82 @@ export class DataTable {
      * @param filterState Nouvel état du filtre (objet { value, operator } ou null)
      */
     public setColumnFilter(columnIndex: number, filterState: ColumnFilterState): void {
-        console.log(`setColumnFilter called for index ${columnIndex}`, filterState);
+        console.log(`[DataTable.setColumnFilter] Received for index ${columnIndex}:`, filterState);
         if (!this.options.columnFiltering?.enabled) return;
 
         const currentFilter = this.columnFilters.get(columnIndex);
 
-        if (!filterState || filterState.value === null || filterState.value === '') {
-            // Si la nouvelle valeur est vide ou l'état est null, supprimer le filtre
+        // Déterminer si l'intention est de supprimer le filtre
+        const isValueEffectivelyEmpty = !filterState || filterState.value === null || filterState.value === '';
+        const isOperatorValueIndependent = filterState?.operator === 'isEmpty' || filterState?.operator === 'isNotEmpty';
+        const shouldDelete = !filterState || (isValueEffectivelyEmpty && !isOperatorValueIndependent);
+
+        if (shouldDelete) {
+            // Supprimer si l'état est null ou si la valeur est vide ET que l'opérateur en a besoin
             if (this.columnFilters.has(columnIndex)) {
+                console.log(`[DataTable.setColumnFilter] Deleting filter for index ${columnIndex}.`);
                 this.columnFilters.delete(columnIndex);
             } else {
+                console.log(`[DataTable.setColumnFilter] No filter to delete for index ${columnIndex}. No change.`);
                 return; // Pas de changement si déjà vide
             }
-        } else {
-            // Mettre à jour ou ajouter le filtre
-            // Assurer un opérateur par défaut si non fourni
+        } else if (filterState) {
+            // Mettre à jour ou ajouter le filtre (y compris pour isEmpty/isNotEmpty)
+            const newOperator = filterState.operator || 'contains';
+            const newValue = filterState.value; // Peut être null/vide pour isEmpty/isNotEmpty
+
             const newFilterState: ColumnFilterState = {
-                value: filterState.value,
-                operator: filterState.operator || 'contains' // Défaut 'contains'
+                value: newValue,
+                operator: newOperator
             };
 
-            // Optimisation: vérifier si l'état a réellement changé
-            if (currentFilter && 
-                currentFilter.value === newFilterState.value && 
-                currentFilter.operator === newFilterState.operator) {
-                return; // Pas de changement
-            }
+            console.log(`[DataTable.setColumnFilter] Setting filter for index ${columnIndex}:`, newFilterState);
             this.columnFilters.set(columnIndex, newFilterState);
         }
 
-        this.currentPage = 1; // Retourner à la page 1
+        // --- Trigger update (si un changement a eu lieu OU si on a supprimé un filtre) ---
+        this.currentPage = 1;
 
+        const finalFilterState = this.columnFilters.get(columnIndex); // Lire l'état après modification
         const allFiltersState: { [key: number]: ColumnFilterState } = {};
         this.columnFilters.forEach((value, key) => {
             allFiltersState[key] = value;
         });
-        dispatchEvent(this, 'dt:filterChange', { 
+        // Dispatch avec l'état *final*
+        dispatchEvent(this, 'dt:filterChange', {
             columnIndex,
-            value: filterState?.value ?? null, // Envoyer la valeur brute
-            operator: filterState?.operator, // Envoyer l'opérateur
-            allFilters: allFiltersState 
+            value: finalFilterState?.value ?? null,
+            operator: finalFilterState?.operator,
+            allFilters: allFiltersState
          });
 
         if (!this.isServerSide) {
-            this.render(); 
+            this.render();
+        }
+    }
+
+    /**
+     * Efface tous les filtres actifs (colonnes et recherche globale) et redessine.
+     */
+    public clearAllFilters(): void {
+        let filtersCleared = false;
+        if (this.filterTerm) {
+            this.filterTerm = '';
+            filtersCleared = true;
+            // Mettre à jour l'input de recherche globale si possible
+            const searchInput = this.element.querySelector('.dt-global-search-input') as HTMLInputElement | null;
+            if (searchInput) searchInput.value = '';
+        }
+        if (this.columnFilters.size > 0) {
+            this.columnFilters.clear();
+            filtersCleared = true;
+        }
+
+        if (filtersCleared) {
+            this.currentPage = 1; // Revenir à la page 1
+            console.log('Tous les filtres ont été effacés.');
+            dispatchEvent(this, 'dt:filtersCleared'); // Nouvel événement optionnel
+            this.render();
         }
     }
 
