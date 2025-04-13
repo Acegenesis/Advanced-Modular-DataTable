@@ -1,209 +1,163 @@
 <!DOCTYPE html>
-<html lang="fr" class="">
+<html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Exemple DataTable</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <title>Exemple DataTable Modulaire</title>
+    <!-- Assurez-vous d'inclure TailwindCSS ou un autre framework CSS si nécessaire -->
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
     <style>
-        /* Style pour les lignes sélectionnées (utilisé par la classe dt-row-selected) */
+        /* Styles personnalisés si besoin */
         .dt-row-selected {
-            /* Tailwind applique déjà bg-indigo-50, ceci est un exemple alternatif ou complémentaire */
-            /* background-color: #eef2ff; */ 
+            /* Style pour les lignes sélectionnées (facultatif, peut être géré par les classes ajoutées) */
+            /* background-color: #e0e7ff; /* Exemple: indigo-100 */
         }
-        .dt-row-selected:hover {
-            /* background-color: #e0e7ff; */ /* Exemple pour hover */
+        body {
+            padding: 2rem;
         }
     </style>
 </head>
 <body>
 
-    <h1 class="text-2xl font-bold mb-4 text-gray-900">Test du Simple DataTable (Sélection)</h1>
+    <h1>DataTable Modulaire</h1>
 
-    <div id="myTableContainer"></div>
+    <div id="myTableContainer" class="mt-4">
+        <!-- Le DataTable sera rendu ici -->
+    </div>
 
-    <script type="module" src="./dist/index.js"></script>
+    <button id="simulateLoadingBtn" class="mt-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">
+        Simuler Chargement (2s)
+    </button>
 
-    <!-- Initialiser la DataTable -->
-    <script>
-        let myDataTableInstance = null; // Rendre l'instance accessible
-        const dt = null; // Déclarer dt en dehors pour l'utiliser dans le listener delete
+    <!-- Charger le bundle JS généré comme un module -->
+    <script type="module">
+        // Importer la classe DataTable depuis le bundle
+        // Le chemin exact dépend de votre configuration de build
+        // import { DataTable, DataTableOptions } from './dist/index.js'; // Ajustez le chemin si nécessaire
+        import { DataTable } from './dist/index.js'; // On importe seulement la classe DataTable
 
-        document.addEventListener('DOMContentLoaded', () => {
-            console.log('DOM chargé, tentative d\'initialisation de DataTable...');
-            // Sample Data (12 rows)
-            const baseSampleData = [
-                [1, 'Alice Fournier', 'alice.fournier@email.com', 'Développeuse', 'Paris', 30, 52000, '01 23 45 67 89'],
-                [2, 'Bob Martin', 'bob.martin@email.com', 'Designer', 'Lyon', 25, 48000, '02 34 56 78 90'],
-                [3, 'Charlie Dupont', 'charlie.dupont@email.com', 'Chef de projet', 'Marseille', 35, 65000, '03 45 67 89 01'],
-                [4, 'David Petit', 'david.petit@email.com', 'Testeur', 'Lille', 28, 42000, '04 56 78 90 12'],
-                [5, 'Eve Dubois', 'eve.dubois@email.com', 'Développeuse', 'Bordeaux', 32, 55000, '05 67 89 01 23'],
-                [6, 'Frank Moreau', 'frank.moreau@email.com', 'Designer', 'Nantes', 29, 49500, '06 78 90 12 34'],
-                [7, 'Grace Leroy', 'grace.leroy@email.com', 'Chef de projet', 'Strasbourg', 40, 70000, '07 89 01 23 45'],
-                [8, 'Heidi Simon', 'heidi.simon@email.com', 'Testeur', 'Toulouse', 22, 38000, '08 90 12 34 56'],
-                [9, 'Ivan Roux', 'ivan.roux@email.com', 'Développeur', 'Nice', 27, 51000, '09 01 23 45 67'],
-                [10, 'Judy Michel', 'judy.michel@email.com', 'Designer', 'Rennes', 31, 53000, '01 12 34 56 78'],
-                [11, 'Kevin Durand', 'kevin.durand@email.com', 'Commercial', 'Strasbourg', 29, 47000, '03 88 99 00 11'],
-                [12, 'Laura Moreau', 'laura.moreau@email.com', 'Chef de projet', 'Rennes', 33, 68000, '02 11 22 33 44']
-            ];
+        // Exemple de données
+        const data = [
+            [1, 'Dupont', 'Jean', 'jean.dupont@email.com', '01 23 45 67 89', 50000],
+            [2, 'Martin', 'Alice', 'alice.martin@provider.net', '06 98 76 54 32', 62000],
+            [3, 'Durand', 'Pierre', 'p.durand@example.org', '04 11 22 33 44', 48000],
+            [4, 'Lefebvre', 'Sophie', 'sophie.lefebvre@mail.co', '07 55 66 77 88', 71000],
+            [5, 'Garcia', 'Luis', 'luis.garcia@server.es', '09 10 20 30 40', 55500],
+            [6, 'Moreau', 'Chloé', 'chloe.moreau@internet.fr', null, 68000], // Donnée manquante (téléphone)
+            [7, 'Girard', 'Lucas', 'lucas.girard@domain.com', '02 22 33 44 55', 45000],
+            [8, 'Bonnet', 'Manon', 'm.bonnet@service.eu', '03 12 34 56 78', 80000],
+            [9, 'Roux', 'Hugo', 'hugo.roux@web.info', '05 99 88 77 66', 51000],
+            [10, 'Vincent', 'Emma', 'emma.vincent@place.org', '01 02 03 04 05', 64000]
+        ];
 
-            // --- Augmenter la quantité de données pour tester le Virtual Scroll ---
-            let sampleData = [];
-            let currentId = 1;
-            for (let i = 0; i < 8; i++) { // Répéter les données 8 fois (12*8 = 96 lignes) + les 12 initiales = 108
-                baseSampleData.forEach(row => {
-                    const newRow = [...row]; // Copier la ligne
-                    newRow[0] = currentId++; // Mettre à jour l'ID
-                    sampleData.push(newRow);
-                });
-            }
-            // Ajouter les données initiales aussi si nécessaire (ou juste utiliser les répétées)
-             sampleData = baseSampleData.concat(sampleData); // Ajoute les 12 premières
-             // Re-numéroter tous les IDs pour être sûr
-             sampleData.forEach((row, index) => { row[0] = index + 1; });
-             console.log(`Generated ${sampleData.length} rows for testing.`);
-            // -----------------------------------------------------------------
+        // Définition des colonnes
+        const columns = [
+            { title: 'ID', type: 'number', sortable: true, width: '80px' },
+            { title: 'Nom', type: 'string', sortable: true, searchable: true },
+            { title: 'Prénom', type: 'string', searchable: true },
+            { title: 'Email', type: 'mail', searchable: true, width: '250px' },
+            { title: 'Téléphone', type: 'tel', searchable: false, width: '180px' },
+            { title: 'Salaire', type: 'money', sortable: true, locale: 'fr-FR', currency: 'EUR', width: '150px' }
+        ];
 
-            // Noms des colonnes avec les types et renderers
-            const columnsDefinition = [
-                { title: 'ID', type: 'number', sortable: true, width: '80px' },     // Largeur fixe pour ID
-                { title: 'NOM', sortable: true, searchable: true, width: '100px' },   // 20% de la largeur
-                { title: 'EMAIL', type: 'mail', sortable: true, searchable: true, width: '100px' }, // 25% de la largeur
-                { title: 'POSTE', searchable: true }, // Largeur automatique
-                { title: 'VILLE', sortable: true, searchable: true, width: '100px' }, // Largeur automatique
-                { title: 'ÂGE', type: 'number', sortable: true, searchable: true, 
-                  render: (age) => `<span class="${parseInt(String(age)) > 30 ? 'text-red-600 font-semibold' : ''}">${age} ans</span>`, width: '100px' 
-                },
-                { title: 'SALAIRE (EUR)', type: 'money', currency: 'EUR', sortable: true, searchable: false, locale:'fr-FR' }, // Largeur auto
-                { title: 'TÉLÉPHONE', type: 'tel', searchable: true }, // Largeur auto
-                 // Pas de définition pour la colonne Actions ici, sa largeur sera automatique ou via CSS
-            ];
+        // Options du DataTable
+        const options = {
+            columns: columns,
+            data: data,
+            pagination: {
+                enabled: true,
+                rowsPerPage: 5 // Afficher 5 lignes par page
+            },
+            sorting: {
+                enabled: true
+            },
+            searching: {
+                enabled: true,
+                debounceTime: 350 // Délai avant recherche
+            },
+            selection: {
+                enabled: true, // Activer la sélection
+                mode: 'multiple' // 'single' ou 'multiple'
+                // initialSelectedIds: [3, 5] // Optionnel: Lignes initialement sélectionnées
+            },
+            rowActions: [ // Ajouter des actions
+                { label: 'Voir', actionId: 'view', className: 'text-blue-600 hover:text-blue-800' },
+                { label: 'Modifier', actionId: 'edit' },
+                { label: 'Supprimer', actionId: 'delete', className: 'text-red-600 hover:text-red-800' }
+            ],
+            loadingMessage: 'Veuillez patienter, chargement des données...' // <-- Message de chargement personnalisé
+        };
 
-            if (typeof window.SimpleDataTable !== 'undefined') {
-                try {
-                    // Stocker l'instance lors de la création
-                    myDataTableInstance = new window.SimpleDataTable('myTableContainer', {
-                        columns: columnsDefinition,
-                        data: sampleData,
-                        // Réactiver la pagination
-                        pagination: { enabled: true, rowsPerPage: 10 }, 
-                        sorting: { enabled: true }, // Tri reste fonctionnel
-                        searching: { enabled: true, debounceTime: 300 }, // Recherche reste fonctionnelle
-                        // --- Activer la sélection ---
-                        selection: { enabled: true }, // Mode multiple par défaut
-                        // --------------------------
-                        rowActions: [
-                            { label: 'Voir', actionId: 'view', className: 'text-blue-600 hover:text-blue-900' },
-                            { label: 'Modifier', actionId: 'edit' },
-                            { label: 'Supprimer', actionId: 'delete', className: 'text-red-600 hover:text-red-900' }
-                        ],
-                        // --- Activer Virtual Scroll ---
-                        virtualScroll: {
-                            enabled: true,
-                            rowHeight: 48, // Hauteur estimée de vos lignes en pixels (IMPORTANT: à ajuster!)
-                            buffer: 5      // Nombre de lignes rendues en plus au-dessus/en dessous
-                        },
-                        // processingMode: 'client' // Mode client est le défaut et nécessaire pour VS
-                        // -------------------------------
-                    });
-                    console.log('DataTable initialisée avec succès !');
+        // Initialiser le DataTable
+        const dataTableInstance = new DataTable('myTableContainer', options);
 
-                    // --- Ajout des écouteurs d'événements --- 
-                    const tableContainer = document.getElementById('myTableContainer');
-                    if (tableContainer) {
-                        tableContainer.addEventListener('dt:pageChange', (event) => {
-                            console.log('Événement dt:pageChange reçu:', event.detail);
-                            // Exemple: Afficher l'info dans un autre élément
-                            // document.getElementById('info-pagination').textContent = 
-                            //    `Page actuelle: ${event.detail.currentPage}`;
-                        });
+        console.log("DataTable initialisé !");
 
-                        tableContainer.addEventListener('dt:sortChange', (event) => {
-                            console.log('Événement dt:sortChange reçu:', event.detail);
-                            // Exemple: Sauvegarder l'état du tri
-                            // localStorage.setItem('tableSort', JSON.stringify(event.detail));
-                        });
-
-                        tableContainer.addEventListener('dt:search', (event) => {
-                            console.log('Événement dt:search reçu:', event.detail);
-                        });
-
-                        tableContainer.addEventListener('dt:renderComplete', (event) => {
-                            console.log('Événement dt:renderComplete reçu');
-                            // Exemple: Initialiser des tooltips ou autres plugins sur le contenu rendu
-                        });
-
-                        tableContainer.addEventListener('dt:actionClick', (event) => {
-                            const detail = event.detail;
-                            const action = detail.action;
-                            const rowData = detail.rowData;
-                            const targetButton = event.target; // Le bouton cliqué
-
-                            console.log(`Action cliquée: ${action}`, rowData);
-
-                            // Utilisation d'un switch pour clarifier les actions
-                            switch (action) {
-                                case 'view':
-                                    console.log(`Action VIEW pour ID: ${rowData[0]}`, rowData);
-                                    alert(`Affichage des détails pour ${rowData[1]} (ID: ${rowData[0]})`);
-                                    // TODO: Implémenter la logique d'affichage (ex: ouvrir une modale)
-                                    break;
-
-                                case 'edit':
-                                    console.log(`Action EDIT pour ID: ${rowData[0]}`, rowData);
-                                    alert(`Ouverture de l'édition pour ${rowData[1]} (ID: ${rowData[0]})`);
-                                    // TODO: Implémenter la logique d'édition (ex: ouvrir un formulaire pré-rempli)
-                                    break;
-
-                                case 'delete':
-                                    console.log(`Action DELETE pour ID: ${rowData[0]}`, rowData);
-                                    // Demander confirmation
-                                    if (confirm(`Voulez-vous vraiment supprimer la ligne pour ${rowData[1]} (ID: ${rowData[0]}) ?`)) {
-                                        // Appel de la nouvelle méthode publique deleteRowById sur l'instance dt
-                                        // Assurez-vous que 'dt' est bien votre variable contenant l'instance DataTable
-                                        // Utiliser myDataTableInstance car dt n'est pas assigné globalement
-                                        const deleted = myDataTableInstance.deleteRowById(rowData[0]); // Utilise l'ID de la première colonne (index 0)
-                                        
-                                        if (deleted) {
-                                            console.log(`Ligne ID ${rowData[0]} supprimée avec succès via API.`);
-                                            // Plus besoin de manipuler le DOM manuellement ici, la méthode s'en charge.
-                                        } else {
-                                             console.warn(`La suppression via API a échoué pour l'ID ${rowData[0]}. La ligne n'a peut-être pas été trouvée.`);
-                                        }
-                                    } else {
-                                        console.log('Suppression annulée par l\'utilisateur.');
-                                    }
-                                    break;
-
-                                default:
-                                    console.warn(`Action inconnue: ${action}`);
-                                    alert(`Action non gérée: ${action}`);
-                            }
-                        });
-                        console.log('Écouteurs d\'événements DataTable ajoutés.');
-
-                        // --- Écouteur pour la sélection ---
-                        tableContainer.addEventListener('dt:selectionChange', (event) => {
-                            const selectedData = event.detail.selectedData;
-                            console.log('%cÉvénement dt:selectionChange reçu:', 'color: blue; font-weight: bold;', selectedData);
-                            // Exemple: Mettre à jour une UI pour montrer le nombre d'éléments sélectionnés
-                            // const countElement = document.getElementById('selected-count');
-                            // if(countElement) countElement.textContent = selectedData.length;
-                        });
-                        // ---------------------------------
-                    }
-                    // --- Fin Ajout des écouteurs --- 
-
-                } catch (error) {
-                    console.error('Erreur lors de l\'instanciation de DataTable:', error);
-                    document.getElementById('myTableContainer').textContent = 'Erreur lors de l\'instanciation de la DataTable.';
-                }
-            } else {
-                console.error('La classe SimpleDataTable n\'a pas été trouvée au moment de DOMContentLoaded.');
-                document.getElementById('myTableContainer').textContent = 'Erreur : SimpleDataTable non trouvée après chargement du DOM.';
-            }
+        // Écouter les événements (exemples)
+        dataTableInstance.element.addEventListener('dt:pageChange', (e) => {
+            console.log('Page changée:', e.detail);
         });
+
+        dataTableInstance.element.addEventListener('dt:sortChange', (e) => {
+            console.log('Tri changé:', e.detail);
+        });
+
+        dataTableInstance.element.addEventListener('dt:search', (e) => {
+            console.log('Recherche effectuée:', e.detail);
+            // Si en mode serveur, ici on ferait l'appel API pour récupérer les nouvelles données
+            // puis on appellerait dataTableInstance.setData(nouvellesDonnees) et ajusterait options.serverSideTotalRows
+        });
+
+        dataTableInstance.element.addEventListener('dt:actionClick', (e) => {
+            console.log('Action cliquée:', e.detail.action, 'sur ligne:', e.detail.rowData);
+            if (e.detail.action === 'delete') {
+                if (confirm(`Voulez-vous vraiment supprimer la ligne avec ID ${e.detail.rowData[0]} ?`)) {
+                    dataTableInstance.deleteRowById(e.detail.rowData[0]);
+                    console.log(`Ligne ${e.detail.rowData[0]} supprimée.`);
+                }
+            }
+            // Gérer les autres actions (view, edit...)
+        });
+
+        dataTableInstance.element.addEventListener('dt:selectionChange', (e) => {
+            console.log('Sélection changée:', e.detail);
+            console.log('IDs sélectionnés:', e.detail.selectedIds);
+            console.log('Données sélectionnées:', e.detail.selectedData); // Attention: peut être limité à la page visible en mode serveur
+            // Mettre à jour d'autres parties de l'UI en fonction de la sélection
+        });
+
+        // Exemple d'utilisation de l'API
+        // setTimeout(() => {
+        //     console.log("Ajout d'une nouvelle ligne...");
+        //     dataTableInstance.addRow([11, 'Nouveau', 'Test', 'test@new.com', '11 22 33 44 55', 99000]);
+        // }, 5000);
+
+        // setTimeout(() => {
+        //     console.log("Mise à jour de la ligne ID 2...");
+        //     dataTableInstance.updateRowById(2, [2, 'Martin-Modifié', 'Alice', 'alice.m@provider.net', '06 98 76 54 32', 63000]);
+        // }, 7000);
+
+        // setTimeout(() => {
+        //     console.log("Sélection programmatique des lignes 1 et 4...");
+        //     dataTableInstance.setSelectedRowIds([1, 4]);
+        // }, 9000);
+
+        // Gestion du bouton de simulation de chargement
+        const loadingButton = document.getElementById('simulateLoadingBtn');
+        if (loadingButton) {
+            loadingButton.addEventListener('click', () => {
+                console.log('Affichage du chargement...');
+                dataTableInstance.setLoading(true);
+
+                // Simuler un délai (ex: appel API)
+                setTimeout(() => {
+                    console.log('Fin du chargement.');
+                    dataTableInstance.setLoading(false);
+                }, 2000); // Simule 2 secondes de chargement
+            });
+        }
+
     </script>
 
 </body>
-</html> 
+</html>
