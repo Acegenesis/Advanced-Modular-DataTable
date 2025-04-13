@@ -29,6 +29,10 @@
         Simuler Chargement (2s)
     </button>
 
+    <div id="myTableContainer2" class="mt-4">
+        <!-- Le DataTable sera rendu ici -->
+    </div>
+
     <!-- Charger le bundle JS généré comme un module -->
     <script type="module">
         // Importer la classe DataTable depuis le bundle
@@ -66,10 +70,20 @@
                 title: 'Prénom',
                 type: 'string',
                 searchable: true,
+                filterType: 'text'
             },
             { title: 'Email', type: 'mail', searchable: true, width: '250px' },
             { title: 'Téléphone', type: 'tel', searchable: false, width: '180px' },
-            { title: 'Salaire', type: 'money', sortable: true, locale: 'fr-FR', currency: 'EUR', width: '150px' }
+            { 
+                title: 'Salaire', 
+                type: 'money', 
+                sortable: true, 
+                locale: 'fr-FR', 
+                currency: 'EUR', 
+                width: '150px',
+                filterType: 'number',
+                filterOperators: ['equals', 'notEquals', 'greaterThan', 'lessThan', 'greaterThanOrEqual', 'lessThanOrEqual', 'between', 'isEmpty', 'isNotEmpty']
+            }
         ];
 
         // Options du DataTable
@@ -193,6 +207,72 @@
                 }
             });
         }
+
+        // --- Configuration de la deuxième table ---
+
+        // Nouvel élément div pour la deuxième table
+        const container2 = document.createElement('div');
+        container2.id = 'datatable2';
+        container2.className = 'mt-8'; // Ajoute un peu d'espace au-dessus
+        document.querySelector('#myTableContainer2').appendChild(container2);
+
+        // Titre pour la deuxième table
+        const title2 = document.createElement('h2');
+        title2.textContent = 'Deuxième DataTable (Scores et Dates)';
+        title2.className = 'text-xl font-semibold mb-4';
+        container2.before(title2); // Insère le titre avant la table
+
+        // Colonnes pour la deuxième table
+        const columns2 = [
+            { title: 'ID', sortable: true, width: '50px' },
+            { 
+                title: 'Produit', 
+                filterType: 'text',
+                searchable: true
+            },
+            { 
+                title: 'Score', 
+                type: 'number', 
+                sortable: true, 
+                filterType: 'number', // Filtre nombre
+                filterOperators: ['equals', 'greaterThan', 'lessThan', 'between', 'isEmpty', 'isNotEmpty']
+            },
+            {
+                title: 'Date Inscription',
+                type: 'string', // Laisser en string pour l'affichage simple, mais utiliser filterType date
+                sortable: true,
+                filterType: 'date', // Filtre date
+                filterOperators: ['equals', 'notEquals', 'after', 'before', 'between', 'isEmpty', 'isNotEmpty']
+            }
+        ];
+        
+        // Données pour la deuxième table (avec dates et nombres variés)
+        const data2 = [
+            [1, 'Pomme', 150, '2023-01-15'],
+            [2, 'Banane', null, '2023-03-22'], // Score null
+            [3, 'Orange', 80, '2023-01-15'],
+            [4, 'Fraise', 200, '2024-05-10'],
+            [5, 'Kiwi', 110, ''], // Date vide
+            [6, 'Mangue', 150, '2024-01-20'],
+            [7, 'Poire', 80, null], // Date null
+            [8, 'Raisin', 180, '2023-11-30']
+        ];
+
+        // Options pour la deuxième table (similaires, mais sans sélection/actions)
+        const options2 = {
+            columns: columns2,
+            data: data2,
+            pagination: { enabled: true, rowsPerPage: 4 },
+            sorting: { enabled: true },
+            searching: { enabled: true },
+             columnFiltering: { 
+                enabled: true,
+                showClearButton: true 
+            }
+        };
+
+        // Initialisation de la deuxième table
+        const table2 = new DataTable('datatable2', options2);
 
     </script>
 

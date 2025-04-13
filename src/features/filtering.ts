@@ -1,6 +1,6 @@
 import { DataTable } from "../core/DataTable";
 import { dispatchEvent, dispatchSearchEvent, dispatchFilterChangeEvent } from "../events/dispatcher";
-import { ColumnFilterState } from "../core/types";
+import { ColumnFilterState, TextFilterOperator, NumberFilterOperator, DateFilterOperator } from "../core/types";
 
 // --- Global Search Feature ---
 
@@ -45,6 +45,11 @@ export function renderSearchInput(instance: DataTable): HTMLInputElement {
 
 // --- Combined Filtering Logic (Global Search + Column Filters) ---
 
+// Helper function pour vérifier si une valeur est considérée comme "vide"
+function isValueEmpty(value: any): boolean {
+    return value === null || value === undefined || String(value).trim() === '';
+}
+
 /**
  * Applies global search and column filters to the data (client-side only).
  * @param instance The DataTable instance.
@@ -78,89 +83,134 @@ export function applyFilters(instance: DataTable, data: any[][]): any[][] {
     // 2. Apply Column Filters
     const columnFilters = state.getColumnFilters();
     if (instance.options.columnFiltering?.enabled && columnFilters.size > 0) {
-        console.log("[applyFilters] Applying column filters:", columnFilters);
         filteredData = filteredData.filter(row => {
-            // console.log("[applyFilters] Checking row:", row);
             for (const [columnIndex, filterState] of columnFilters.entries()) {
-                if (!filterState || filterState.value === null || filterState.value === undefined) continue;
+                if (!filterState || (filterState.operator !== 'isEmpty' && filterState.operator !== 'isNotEmpty' && isValueEmpty(filterState.value))) {
+                    continue; // Ne pas filtrer si l'état est invalide ou si la valeur est vide (sauf pour is[Not]Empty)
+                }
 
                 const cellData = row[columnIndex];
                 const columnDef = instance.options.columns[columnIndex];
-                // Trim() et toLowerCase() sur les données de la cellule également
-                const cellDataString = String(cellData).trim().toLowerCase();
                 const filterValue = filterState.value;
-                const filterOperator = filterState.operator || 'contains';
-
-                // console.log(`[applyFilters] Col ${columnIndex} (${columnDef.title}) Filter: Op=${filterOperator}, Val='${filterValue}', Cell='${cellData}' (Str='${cellDataString}')`);
+                const filterOperator = filterState.operator as TextFilterOperator | NumberFilterOperator | DateFilterOperator;
+                let match = false;
 
                 switch (columnDef.filterType) {
                     case 'text':
-                        const cellDataForCheck = row[columnIndex]; // Garder la valeur originale pour check null/undefined
-                        const cellStringForCheck = String(cellDataForCheck).trim().toLowerCase();
-
-                        // La valeur du filtre n'est utilisée que si l'opérateur en a besoin
-                        const filterValueString = (filterOperator !== 'isEmpty' && filterOperator !== 'isNotEmpty') 
-                            ? String(filterValue).trim().toLowerCase() 
-                            : '';
+                        const textOp = filterOperator as TextFilterOperator;
+                        const cellString = String(cellData);
                         
-                        if (filterOperator === 'isEmpty' || filterOperator === 'isNotEmpty' || filterValueString) {
-                            let match = false;
-                            // console.log(`[applyFilters] Text Filter [Col ${columnIndex}]: Comparing Original='${cellDataForCheck}' (Str='${cellStringForCheck}') ${filterOperator} FilterVal='${filterValueString}'`);
-                            switch (filterOperator) {
-                                case 'equals':
-                                    match = cellStringForCheck === filterValueString;
-                                    break;
-                                case 'startsWith':
-                                    match = cellStringForCheck.startsWith(filterValueString);
-                                    break;
-                                case 'endsWith':
-                                    match = cellStringForCheck.endsWith(filterValueString);
-                                    break;
-                                case 'notContains':
-                                    match = !cellStringForCheck.includes(filterValueString);
-                                    break;
-                                case 'isEmpty':
-                                    // Vrai si null, undefined, ou chaîne vide après trim
-                                    match = cellDataForCheck == null || cellStringForCheck === ''; 
-                                    break;
-                                case 'isNotEmpty':
-                                     // Vrai si non null/undefined ET chaîne non vide après trim
-                                    match = cellDataForCheck != null && cellStringForCheck !== '';
-                                    break;
-                                case 'contains':
-                                default:
-                                    match = cellStringForCheck.includes(filterValueString);
-                                    break;
+                        if (textOp === 'isEmpty') {
+                            match = isValueEmpty(cellData);
+                        } else if (textOp === 'isNotEmpty') {
+                            match = !isValueEmpty(cellData);
+                        } else {
+                            const filterValueString = String(filterValue).toLowerCase();
+                            const cellStringLower = cellString.toLowerCase();
+                            switch (textOp) {
+                                case 'equals': match = cellStringLower === filterValueString; break;
+                                case 'startsWith': match = cellStringLower.startsWith(filterValueString); break;
+                                case 'endsWith': match = cellStringLower.endsWith(filterValueString); break;
+                                case 'notContains': match = !cellStringLower.includes(filterValueString); break;
+                                case 'contains': 
+                                default: match = cellStringLower.includes(filterValueString); break;
                             }
-                            // console.log(`[applyFilters] Text Filter [Col ${columnIndex}]: Match result = ${match}`);
-                            if (!match) {
-                                return false;
+                        }
+                        break;
+
+                    case 'number':
+                        const numOp = filterOperator as NumberFilterOperator;
+                        const cellValueNum = !isValueEmpty(cellData) ? parseFloat(String(cellData)) : null;
+                        
+                        if (numOp === 'isEmpty') {
+                            match = cellValueNum === null || isNaN(cellValueNum);
+                        } else if (numOp === 'isNotEmpty') {
+                            match = cellValueNum !== null && !isNaN(cellValueNum);
+                        } else if (cellValueNum !== null && !isNaN(cellValueNum)) { // Procéder seulement si la cellule est un nombre valide
+                            if (numOp === 'between') {
+                                if (typeof filterValue === 'object' && filterValue !== null && 'from' in filterValue && 'to' in filterValue) {
+                                    const from = filterValue.from as number;
+                                    const to = filterValue.to as number;
+                                    match = cellValueNum >= from && cellValueNum <= to;
+                                }
+                            } else {
+                                const filterValueNum = parseFloat(String(filterValue));
+                                if (!isNaN(filterValueNum)) {
+                                    switch (numOp) {
+                                        case 'equals': match = cellValueNum === filterValueNum; break;
+                                        case 'notEquals': match = cellValueNum !== filterValueNum; break;
+                                        case 'greaterThan': match = cellValueNum > filterValueNum; break;
+                                        case 'lessThan': match = cellValueNum < filterValueNum; break;
+                                        case 'greaterThanOrEqual': match = cellValueNum >= filterValueNum; break;
+                                        case 'lessThanOrEqual': match = cellValueNum <= filterValueNum; break;
+                                    }
+                                }
+                            }
+                        }
+                        break;
+
+                    case 'date':
+                        const dateOp = filterOperator as DateFilterOperator;
+                        let cellValueDate: Date | null = null;
+                        if (!isValueEmpty(cellData)) {
+                            const parsedDate = new Date(String(cellData));
+                            if (!isNaN(parsedDate.getTime())) {
+                                parsedDate.setHours(0, 0, 0, 0);
+                                cellValueDate = parsedDate;
+                            }
+                        }
+
+                        if (dateOp === 'isEmpty') {
+                            match = cellValueDate === null;
+                        } else if (dateOp === 'isNotEmpty') {
+                            match = cellValueDate !== null;
+                        } else if (cellValueDate !== null) {
+                            if (dateOp === 'between') {
+                                if (typeof filterValue === 'object' && filterValue !== null && 'from' in filterValue && 'to' in filterValue) {
+                                    const fromDate = new Date(String(filterValue.from));
+                                    const toDate = new Date(String(filterValue.to));
+                                    if (!isNaN(fromDate.getTime()) && !isNaN(toDate.getTime())) {
+                                        fromDate.setHours(0, 0, 0, 0);
+                                        toDate.setHours(0, 0, 0, 0);
+                                        match = cellValueDate.getTime() >= fromDate.getTime() && cellValueDate.getTime() <= toDate.getTime();
+                                    }
+                                }
+                            } else {
+                                const filterValueDate = new Date(String(filterValue));
+                                if (!isNaN(filterValueDate.getTime())) {
+                                    filterValueDate.setHours(0, 0, 0, 0);
+                                    const cellTime = cellValueDate.getTime();
+                                    const filterTime = filterValueDate.getTime();
+                                    switch (dateOp) {
+                                        case 'equals': match = cellTime === filterTime; break;
+                                        case 'notEquals': match = cellTime !== filterTime; break;
+                                        case 'after': match = cellTime > filterTime; break;
+                                        case 'before': match = cellTime < filterTime; break;
+                                        case 'afterOrEqual': match = cellTime >= filterTime; break;
+                                        case 'beforeOrEqual': match = cellTime <= filterTime; break;
+                                    }
+                                }
                             }
                         }
                         break;
 
                     case 'select':
+                        const cellDataString = String(cellData).trim().toLowerCase();
                         const selectValueString = String(filterValue).toLowerCase();
-                        // Pour Select, pas de trim() sur la valeur du filtre car elle vient des options
-                        console.log(`[applyFilters] Select Filter [Col ${columnIndex}]: Comparing '${cellDataString}' equals '${selectValueString}'`); // Log détaillé
-                        if (cellDataString !== selectValueString) {
-                            console.log(`[applyFilters] Select Filter [Col ${columnIndex}]: Match result = false`); // Log résultat
-                            // console.log(`[applyFilters] Row rejected by column ${columnIndex}`);
-                            return false;
-                        }
-                         console.log(`[applyFilters] Select Filter [Col ${columnIndex}]: Match result = true`); // Log résultat
+                        match = cellDataString === selectValueString;
                         break;
-                    // TODO: Add cases for 'number-range', 'date-range' later
                     default:
-                        // If filter type is unknown or not handled, don't filter based on it?
-                        // Or assume text filter?
+                        match = true;
                         break;
                 }
+
+                if (!match) {
+                    return false;
+                }
             }
-            // console.log("[applyFilters] Row passed all filters:", row);
             return true;
         });
     }
 
     return filteredData;
-} 
+}

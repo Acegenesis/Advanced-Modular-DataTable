@@ -10,17 +10,17 @@ export interface ColumnDefinition {
     title: string;
     data?: string;
     name?: string;
-    type?: 'string' | 'number' | 'mail' | 'tel' | 'money';
+    type?: 'string' | 'number' | 'date' | 'mail' | 'tel' | 'money';
     render?: (cellData: any, rowData: any[]) => string | HTMLElement | DocumentFragment;
     sortable?: boolean;
     searchable?: boolean;
     locale?: string;
     currency?: string;
     width?: string;
-    filterType?: 'text' | 'select';
+    filterType?: 'text' | 'select' | 'number' | 'date';
     filterOptions?: string[] | { value: any; label: string }[];
     filterPlaceholder?: string;
-    filterOperators?: TextFilterOperator[];
+    filterOperators?: TextFilterOperator[] | NumberFilterOperator[] | DateFilterOperator[];
 }
 
 // Interface pour les actions
@@ -91,10 +91,36 @@ export type TextFilterOperator =
     'isEmpty' |
     'isNotEmpty';
 
+// Nouveaux opérateurs pour les filtres nombre
+export type NumberFilterOperator = 
+    'equals' | 
+    'notEquals' | 
+    'greaterThan' | 
+    'lessThan' | 
+    'greaterThanOrEqual' | 
+    'lessThanOrEqual' | 
+    'between' | // Nécessitera une valeur spéciale { from: number, to: number }
+    'isEmpty' | 
+    'isNotEmpty';
+
+// Nouveaux opérateurs pour les filtres date (similaires aux nombres)
+export type DateFilterOperator = 
+    'equals' | 
+    'notEquals' | 
+    'after' | // >
+    'before' | // <
+    'afterOrEqual' | // >=
+    'beforeOrEqual' | // <=
+    'between' | // Nécessitera une valeur spéciale { from: Date | string, to: Date | string }
+    'isEmpty' | 
+    'isNotEmpty';
+
 // État d'un filtre de colonne individuel
 export type ColumnFilterState = {
-    value: string | number | { value: any; label: string } | null;
-    operator?: TextFilterOperator;
+    // La valeur peut être une chaîne, un nombre, ou un objet pour les plages
+    value: string | number | { from: number | string | Date, to: number | string | Date } | null;
+    // L'opérateur peut être l'un des types définis
+    operator?: TextFilterOperator | NumberFilterOperator | DateFilterOperator;
 } | null;
 
 export type SortDirection = 'asc' | 'desc' | 'none';
