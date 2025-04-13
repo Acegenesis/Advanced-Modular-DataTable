@@ -32,60 +32,56 @@ export interface RowAction {
     className?: string;   
 }
 
-// Options principales - Revenir à non générique
-export interface DataTableOptions {
-    columns: ColumnDefinition[];
-    data?: any[][]; // Revenir à any[][]
-    uniqueRowIdColumn?: number | string; // Index (nombre) ou nom de la colonne (chaîne) contenant l'ID
-    pagination?: PaginationOptions;
-    sorting?: {
-        enabled: boolean;
-    };
-    searching?: {
-        enabled: boolean;
-        debounceTime?: number; 
-    };
-    rowActions?: RowAction[];
-    actionsColumn?: { // Conserver pour rétrocompatibilité? ou supprimer si refactorisé partout
-         header?: string;
-         width?: string;
-    };
-    processingMode?: 'client' | 'server';
-    serverSideTotalRows?: number;
-    serverSide?: {
-        fetchData?: (params: ServerSideParams) => Promise<{ data: any[][]; totalRecords: number }>;
-    };
-    selection?: {
-        enabled: boolean;
-        mode?: 'single' | 'multiple';
-        initialSelectedIds?: any[]; // Revenir à any[]
-    };
-    loadingMessage?: string;
-    exporting?: {
-        csv?: CsvExportOptions | boolean;
-        // excel?: boolean; // Option future pour Excel
-    };
-    // Nouvelle option globale pour activer/désactiver les filtres de colonne
-    columnFiltering?: {
-        enabled: boolean;
-        showClearButton?: boolean;
-    };
-    // Nouvelle option pour la gestion de l'état
-    stateManagement?: {
-        persist?: boolean; // Activer/désactiver la persistance
-        prefix?: string; // Préfixe optionnel pour la clé localStorage
-    };
-    // Ajout option globale pour redimensionnement
-    resizableColumns?: boolean;
+// Options pour l'export CSV (potentiellement déjà défini)
+export interface CsvExportOptions {
+    enabled?: boolean; // Peut-être redondant si on utilise l'objet
+    delimiter?: string;
+    filename?: string;
+    encoding?: string;
+    bom?: boolean;
 }
 
-// Options spécifiques à l'export CSV
-export interface CsvExportOptions {
+// Options pour l'export Excel (vide pour l'instant, peut être étendu plus tard)
+export interface ExcelExportOptions {
     enabled?: boolean;
-    delimiter?: string;
-    encoding?: string;
     filename?: string;
-    bom?: boolean;
+    sheetName?: string;
+    // ... autres options exceljs potentielles
+}
+
+// Options pour l'export PDF (vide pour l'instant, peut être étendu plus tard)
+export interface PdfExportOptions {
+    enabled?: boolean;
+    filename?: string;
+    orientation?: 'portrait' | 'landscape';
+    format?: string; // ex: 'a4'
+    // ... autres options jspdf/autotable potentielles
+}
+
+// Options principales
+export interface DataTableOptions {
+    columns: ColumnDefinition[];
+    data?: any[][];
+    uniqueRowIdColumn?: number | string;
+    pagination?: PaginationOptions; 
+    sorting?: { enabled: boolean; };
+    searching?: { enabled: boolean; debounceTime?: number; };
+    rowActions?: RowAction[]; 
+    actionsColumn?: { header?: string; width?: string; }; 
+    processingMode?: 'client' | 'server';
+    serverSideTotalRows?: number;
+    serverSide?: { fetchData?: (params: ServerSideParams) => Promise<{ data: any[][]; totalRecords: number }>; };
+    selection?: { enabled: boolean; mode?: 'single' | 'multiple'; initialSelectedIds?: any[]; };
+    loadingMessage?: string;
+    // *** Modifier la structure de exporting ***
+    exporting?: {
+        csv?: CsvExportOptions | boolean;     // Garde la flexibilité existante
+        excel?: ExcelExportOptions | boolean; // Permet d'activer/désactiver ou passer des options
+        pdf?: PdfExportOptions | boolean;     // Permet d'activer/désactiver ou passer des options
+    };
+    columnFiltering?: { enabled: boolean; showClearButton?: boolean; };
+    stateManagement?: { persist?: boolean; prefix?: string; };
+    resizableColumns?: boolean;
 }
 
 // Opérateurs pour les filtres texte

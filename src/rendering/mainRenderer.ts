@@ -6,7 +6,7 @@ import { renderPaginationControls, getCurrentPageData } from "../features/pagina
 import { updateSelectAllCheckboxState } from "../features/selection";
 import { renderHeader } from "./headerRenderer";
 import { renderStandardBody } from "./bodyRenderer";
-import { exportToCSV } from "../features/exporting";
+import { exportToCSV, exportToExcel, exportToPDF } from "../features/exporting";
 import { ColumnDefinition, ColumnFilterState } from "../core/types";
 
 // --- Helper pour formater la valeur d'un filtre pour affichage ---
@@ -162,17 +162,91 @@ export function render(instance: DataTable): void {
         rightToolbar.appendChild(clearFiltersButton);
     }
 
-    // Bouton d'export CSV (if enabled)
-    let exportButton: HTMLButtonElement | null = null;
-    if (instance.options.exporting?.csv) {
-        const csvOptions = instance.options.exporting.csv;
-        if (csvOptions === true || (typeof csvOptions === 'object' && csvOptions.enabled !== false)) {
-            exportButton = document.createElement('button');
-            exportButton.textContent = 'Exporter CSV';
-            exportButton.className = 'px-3 py-1.5 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500';
-            exportButton.addEventListener('click', () => exportToCSV(instance)); // exportToCSV accèdera à l'état via l'instance
-            rightToolbar.appendChild(exportButton);
+    // --- Bouton d'Export avec Dropdown --- 
+    // Vérifier si exporting est activé et a au moins une option valide
+    const exportOptions = instance.options.exporting;
+    const csvEnabled = exportOptions?.csv === true || (typeof exportOptions?.csv === 'object' && exportOptions.csv.enabled !== false);
+    const excelEnabled = exportOptions?.excel === true || (typeof exportOptions?.excel === 'object' && exportOptions.excel.enabled !== false);
+    const pdfEnabled = exportOptions?.pdf === true || (typeof exportOptions?.pdf === 'object' && exportOptions.pdf.enabled !== false);
+    
+    if (csvEnabled || excelEnabled || pdfEnabled) { // Afficher le bouton seulement si au moins un export est actif
+        const exportDropdownContainer = document.createElement('div');
+        exportDropdownContainer.className = 'relative inline-block text-left';
+
+        // Bouton principal
+        const exportButton = document.createElement('button');
+        exportButton.type = 'button';
+        exportButton.id = `${instance.element.id}-export-button`;
+        exportButton.textContent = 'Exporter'; 
+        exportButton.innerHTML += ' <svg class="inline-block w-4 h-4 ml-1 -mr-1" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" /></svg>';
+        exportButton.className = 'inline-flex justify-center w-full rounded-md border border-gray-300 shadow-sm px-4 py-1.5 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500';
+        exportButton.setAttribute('aria-haspopup', 'true');
+        exportButton.setAttribute('aria-expanded', 'false');
+
+        // Menu Dropdown
+        const exportDropdownMenu = document.createElement('div');
+        exportDropdownMenu.id = `${instance.element.id}-export-menu`;
+        exportDropdownMenu.className = 'origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 focus:outline-none hidden z-20';
+        exportDropdownMenu.setAttribute('role', 'menu');
+        exportDropdownMenu.setAttribute('aria-orientation', 'vertical');
+        exportDropdownMenu.setAttribute('aria-labelledby', exportButton.id);
+
+        // Helper createMenuItem (inchangé)
+        const createMenuItem = (text: string, action: () => void): HTMLElement => {
+            const menuItem = document.createElement('a');
+            menuItem.href = '#';
+            menuItem.textContent = text;
+            menuItem.className = 'block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 hover:text-gray-900';
+            menuItem.setAttribute('role', 'menuitem');
+            menuItem.addEventListener('click', (e) => {
+                e.preventDefault();
+                action();
+                exportDropdownMenu.classList.add('hidden');
+                exportButton.setAttribute('aria-expanded', 'false');
+            });
+            return menuItem;
+        };
+
+        // *** Ajouter les options conditionnellement ***
+        if (csvEnabled) {
+            exportDropdownMenu.appendChild(createMenuItem('Exporter CSV', () => exportToCSV(instance)));
         }
+        if (excelEnabled) {
+            exportDropdownMenu.appendChild(createMenuItem('Exporter Excel (.xlsx)', () => exportToExcel(instance)));
+        }
+        if (pdfEnabled) {
+            exportDropdownMenu.appendChild(createMenuItem('Exporter PDF', () => exportToPDF(instance)));
+        }
+        
+        // Logique open/close et clic extérieur (inchangée)
+        exportButton.addEventListener('click', () => {
+            const isHidden = exportDropdownMenu.classList.toggle('hidden');
+            exportButton.setAttribute('aria-expanded', String(!isHidden));
+        });
+
+        // Fermer si clic extérieur
+        const handleOutsideExportClick = (event: MouseEvent) => {
+            if (!exportDropdownContainer.contains(event.target as Node)) {
+                exportDropdownMenu.classList.add('hidden');
+                exportButton.setAttribute('aria-expanded', 'false');
+                document.removeEventListener('click', handleOutsideExportClick, true);
+            }
+        };
+
+        exportButton.addEventListener('click', (e) => {
+            // Si on ouvre le menu, ajouter l'écouteur extérieur
+            if (!exportDropdownMenu.classList.contains('hidden')) {
+                 // Utiliser setTimeout pour s'assurer que l'écouteur est ajouté *après* le cycle d'événement actuel
+                 setTimeout(() => { document.addEventListener('click', handleOutsideExportClick, true); }, 0);
+            } else {
+                // Si on ferme, on le retire (géré aussi dans handleOutsideExportClick)
+                document.removeEventListener('click', handleOutsideExportClick, true);
+            }
+        });
+        
+        exportDropdownContainer.appendChild(exportButton);
+        exportDropdownContainer.appendChild(exportDropdownMenu);
+        rightToolbar.appendChild(exportDropdownContainer); 
     }
 
     // Ajouter le conteneur droit seulement s'il a des boutons
@@ -241,9 +315,8 @@ export function render(instance: DataTable): void {
     instance.element.appendChild(mainContainer);
 
     // 5. Render Pagination Controls
-    // Afficher la pagination si activée ET s'il y a plus de lignes que la limite OU si on est en mode serveur (pour afficher même si 0 résultat serveur)
-    const shouldRenderPagination = instance.options.pagination?.enabled && 
-                                 (currentTotalRows > state.getRowsPerPage() || state.getIsServerSide());
+    // Afficher la pagination si elle est activée dans les options
+    const shouldRenderPagination = instance.options.pagination?.enabled;
     
     // Supprimer les anciens contrôles au cas où ils ne devraient plus être affichés
     const existingPaginationControls = instance.element.querySelector('#dt-pagination-controls');
@@ -251,8 +324,9 @@ export function render(instance: DataTable): void {
         existingPaginationControls.remove();
     }
 
+    // Afficher les contrôles si pagination activée (la fonction interne gère les états désactivés)
     if (shouldRenderPagination) {
-        renderPaginationControls(instance, currentTotalRows); // Passer le total après filtre/tri
+        renderPaginationControls(instance, currentTotalRows); 
     }
 
     // 6. Dispatch Render Complete Event

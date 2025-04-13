@@ -20,10 +20,16 @@
   "author": "",
   "license": "MIT",
   "devDependencies": {
+    "@types/exceljs": "^0.5.3",
     "esbuild": "^0.25.2",
     "typescript": "^5.0.0"
   },
   "files": [
     "dist"
-  ]
+  ],
+  "dependencies": {
+    "exceljs": "^4.4.0",
+    "jspdf": "^3.0.1",
+    "jspdf-autotable": "^5.0.2"
+  }
 }

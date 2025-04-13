@@ -51,7 +51,12 @@
             [7, 'Girard', 'Lucas', 'lucas.girard@domain.com', '02 22 33 44 55', 45000],
             [8, 'Bonnet', 'Manon', 'm.bonnet@service.eu', '03 12 34 56 78', 80000],
             [9, 'Roux', 'Hugo', 'hugo.roux@web.info', '05 99 88 77 66', 51000],
-            [10, 'Vincent', 'Emma', 'emma.vincent@place.org', '01 02 03 04 05', 64000]
+            [10, 'Vincent', 'Emma', 'emma.vincent@place.org', '01 02 03 04 05', 64000],
+            [11, 'Dubois', 'Thomas', 'thomas.dubois@example.com', '06 12 34 56 78', 52000],
+            [12, 'Girard', 'Lucas', 'lucas.girard@domain.com', '02 22 33 44 55', 45000],
+            [13, 'Girard', 'Lucas', 'lucas.girard@domain.com', '02 22 33 44 55', 45000],
+            [14, 'Girard', 'Lucas', 'lucas.girard@domain.com', '02 22 33 44 55', 45000],
+            [15, 'Girard', 'Lucas', 'lucas.girard@domain.com', '02 22 33 44 55', 45000],
         ];
 
         // Colonnes pour la première table
@@ -102,13 +107,16 @@
             pagination: {
                 enabled: true,
                 rowsPerPage: 5,
+                rowsPerPageOptions: [5, 10, 25, 50],
                 style: 'numbered-jump'
             },
             sorting: { enabled: true },
             searching: { enabled: true },
             selection: { enabled: true, mode: 'multiple' },
             exporting: {
-                csv: { enabled: true, filename: 'export_utilisateurs' }
+                csv: true,
+                excel: true,
+                pdf: true
             },
             columnFiltering: { 
                 enabled: true,
@@ -119,7 +127,6 @@
                 { label: 'Modifier', actionId: 'edit', className: 'text-blue-500' },
                 { label: 'Supprimer', actionId: 'delete', className: 'text-red-500' }
             ],
-            // Activation de la persistance de l'état
             stateManagement: { persist: true } 
         };
 
@@ -261,8 +268,8 @@
                 enabled: true,
                 showClearButton: true 
             },
-            // Activation de la persistance de l'état
-            stateManagement: { persist: true } 
+            stateManagement: { persist: true },
+            // exporting: false // Optionnellement désactiver pour cette table
         };
 
         // Initialisation de la deuxième table
