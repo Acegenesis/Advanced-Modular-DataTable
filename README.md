@@ -11,7 +11,7 @@ Une bibliothèque JavaScript/TypeScript pour créer des tableaux de données int
 *   **Pagination :** Navigation par page avec plusieurs styles et sélecteur de lignes par page.
 *   **Sélection de Lignes :** Mode simple ou multiple, avec état persistant et API.
 *   **Actions sur les Lignes :** Définition facile de boutons d'action personnalisés par ligne.
-*   **Colonnes Redimensionnables :** Ajustement manuel de la largeur des colonnes par glisser-déposer et double-clic pour l'auto-ajustement.
+*   **Colonnes Redimensionnables :** Ajustement manuel de la largeur des colonnes par glisser-déposer et double-clic pour l'auto-ajustement (adapte la largeur au contenu le plus large de l'en-tête ou des cellules, plus une petite marge).
 *   **Réorganisation des Colonnes :** Modification de l'ordre des colonnes par glisser-déposer.
 *   **Exportation de Données :** Export des données (filtrées/triées) aux formats CSV, Excel (.xlsx) et PDF via un menu déroulant.
 *   **Persistance de l'État :** Sauvegarde automatique de l'état (page, tri, filtres, largeurs/ordre des colonnes) dans le `localStorage`.
@@ -151,18 +151,16 @@ L'instance `DataTable` expose plusieurs méthodes publiques :
 
 *   `setLoading(isLoading: boolean): void`: Affiche ou masque l'overlay de chargement.
 *   `setData(newData: any[][]): void`: Remplace complètement les données de la table.
-*   `addRow(newRowData: any[]): void`: Ajoute une nouvelle ligne à la fin. *(Vérifier implémentation)*
-*   `updateRowById(rowId: RowId, updatedRowData: any[]): void`: Met à jour une ligne existante par son ID. *(Vérifier implémentation)*
-*   `deleteRowById(rowId: RowId): void`: Supprime une ligne par son ID. *(Vérifier implémentation)*
-*   `setSelectedRowIds(ids: RowId[]): void`: Définit les lignes sélectionnées.
-*   `getSelectedRowIds(): Set<RowId>`: Retourne un Set des IDs des lignes sélectionnées.
+*   `addRow(newRowData: any[]): void`: Ajoute une nouvelle ligne à la fin.
+*   `updateRowById(rowId: any, updatedRowData: any[]): boolean`: Met à jour une ligne existante par son ID. Retourne `true` si la mise à jour a réussi, `false` sinon.
+*   `deleteRowById(rowId: any): boolean`: Supprime une ligne par son ID. Retourne `true` si la suppression a réussi, `false` sinon.
+*   `setSelectedRowIds(ids: any[]): void`: Définit les lignes sélectionnées.
+*   `getSelectedRowIds(): any[]`: Retourne un tableau des IDs des lignes sélectionnées.
 *   `getSelectedRowData(): any[][]`: Retourne les données complètes des lignes sélectionnées. *(Attention: mode serveur peut limiter)*
 *   `setPage(pageNumber: number): void`: Navigue vers une page spécifique.
 *   `clearAllFilters(): void`: Efface le filtre global et tous les filtres de colonne.
-*   `destroy(): void`: Nettoie les écouteurs d'événements et supprime les éléments du DOM créés par la table. *(Vérifier implémentation)*
+*   `destroy(): void`: Nettoie les écouteurs d'événements et supprime les éléments du DOM créés par la table. *(Note: Le nettoyage des écouteurs globaux peut être amélioré)*.
 *   `render(): void`: Force un re-rendu complet de la table.
-
-*(Note: La présence et la signature exacte de certaines méthodes comme `addRow`, `updateRowById`, `deleteRowById`, `destroy` doivent être vérifiées dans le code source actuel).*
 
 ## Événements Personnalisés
 
@@ -175,10 +173,8 @@ La DataTable émet des événements personnalisés sur son élément racine (`in
 *   `dt:filterChange`: Émis après l'application ou la suppression d'un filtre de colonne. `event.detail`: `{ filters: Map<number, ColumnFilterState>; }`
 *   `dt:actionClick`: Émis lorsqu'un bouton d'action de ligne est cliqué. `event.detail`: `{ action: string; rowData: any[]; }`
 *   `dt:selectionChange`: Émis après un changement de sélection. `event.detail`: `{ selectedIds: any[]; selectedData: any[][]; }`
-*   `dt:columnResize`: Émis après le redimensionnement manuel d'une colonne. `event.detail`: `{ columnIndex: number; width: number; }` *(Vérifier implémentation)*
-*   `dt:columnReorder`: Émis après la réorganisation des colonnes. `event.detail`: `{ columnOrder: number[]; }` *(Vérifier implémentation)*
-
-*(Note: La présence et les détails des événements `dt:columnResize` et `dt:columnReorder` doivent être vérifiés).*
+*   `dt:columnResize`: Émis après le redimensionnement manuel d'une colonne. `event.detail`: `{ columnIndex: number; newWidth: number; }`
+*   `dt:columnReorder`: Émis après la réorganisation des colonnes. `event.detail`: `{ columnOrder: number[]; }`
 
 ## Styling
 
@@ -218,8 +214,8 @@ Ce README devrait fournir une bonne base. Vous pourrez l'affiner en ajoutant des
 
 *   **Nettoyage :** Supprimer les `console.log` de débogage.
 *   **API & Événements :**
-    *   Vérifier/finaliser l'implémentation des méthodes API (`addRow`, `updateRowById`, `deleteRowById`, `destroy`).
-    *   Vérifier/finaliser l'implémentation des événements `dt:columnResize` et `dt:columnReorder`.
+    *   ~~Vérifier/finaliser l'implémentation des méthodes API (`addRow`, `updateRowById`, `deleteRowById`, `destroy`).~~
+    *   Améliorer la méthode `destroy` pour un nettoyage plus complet des écouteurs d'événements globaux.
 *   **Filtres :**
     *   Améliorer l'UI des filtres (calendrier pour dates, slider pour nombres).
     *   Permettre la sauvegarde/chargement de "vues" (combinaisons de filtres/tri).

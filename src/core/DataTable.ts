@@ -57,10 +57,27 @@ export class DataTable {
 
     // --- Public API Method: Destroy --- 
     public destroy(): void {
+        console.log("[DataTable destroy] Cleaning up...");
+        // Supprimer les écouteurs d'événements globaux (ex: resize, clic extérieur popups)
+        // Note: la gestion des écouteurs doit être plus robuste pour un destroy complet.
+        // Exemple basique:
+        // window.removeEventListener('resize', this.resizeObserverCallback); 
+        // document.removeEventListener('click', handleOutsideClick, true); // Assumer une référence accessible
+
+        // Vider le conteneur
         this.element.innerHTML = '';
-        if (this.debounceTimer) clearTimeout(this.debounceTimer);
-        // Remove other listeners if any were added directly to document/window
-        console.log("DataTable instance destroyed");
+
+        // Supprimer les références (aide le garbage collector)
+        // (this as any).stateManager = null;
+        // (this as any).options = null;
+        // ... autres références internes ...
+
+        // Supprimer l'instance du cache global si utilisé
+        const instanceIndex = (window as any).DataTableInstances?.indexOf(this);
+        if (instanceIndex > -1) {
+            (window as any).DataTableInstances.splice(instanceIndex, 1);
+        }
+        console.log("[DataTable destroy] Cleanup complete.");
     }
 
     // --- Core Rendering Logic --- 
@@ -82,27 +99,64 @@ export class DataTable {
         dispatchEvent(this, 'dataLoad', { data: newData });
         dispatchSelectionChangeEvent(this);
     }
-    public addRow(rowData: any[]): void {
-        addRow(this, rowData);
-        this.render();
-        dispatchEvent(this, 'rowAdd', { rowData: rowData });
-    }
-    public deleteRowById(id: any, idColumnIndex: number = 0): boolean {
-        const deleted = deleteRowById(this, id, idColumnIndex);
-        if (deleted) {
-            this.render();
-            dispatchEvent(this, 'rowDelete', { rowId: id });
-            dispatchSelectionChangeEvent(this);
+    public addRow(newRowData: any[]): void {
+        if (this.stateManager.getIsServerSide()) {
+            console.warn("addRow() a un effet limité en mode serveur. Les données doivent être gérées côté serveur.");
         }
-        return deleted;
+        this.stateManager._addRow(newRowData);
+        this.render(); // Re-render pour afficher la nouvelle ligne (et recalculer pagination etc.)
+        // Pas d'événement spécifique "rowAdded" pour l'instant
+        // Sauvegarder l'état après le render implicite peut être trop fréquent, on pourrait le faire optionnellement.
     }
-    public updateRowById(id: any, newRowData: any[], idColumnIndex: number = 0): boolean {
-        const updated = updateRowById(this, id, newRowData, idColumnIndex);
-        if (updated) {
-            this.render();
-            dispatchEvent(this, 'rowUpdate', { rowId: id, rowData: newRowData });
+    public deleteRowById(rowId: string | number): boolean {
+        if (this.stateManager.getIsServerSide()) {
+            console.warn("deleteRowById() a un effet limité en mode serveur. Les données doivent être gérées côté serveur.");
         }
-        return updated;
+        const uniqueColOption = this.options.uniqueRowIdColumn;
+        let uniqueColIndex = 0; // Default to first column
+        if (typeof uniqueColOption === 'number') {
+            uniqueColIndex = uniqueColOption;
+        } else if (typeof uniqueColOption === 'string') {
+            const foundIndex = this.options.columns.findIndex(col => col.name === uniqueColOption);
+            if (foundIndex !== -1) {
+                 uniqueColIndex = foundIndex;
+            } else {
+                 console.error(`deleteRowById: Nom de colonne ID unique "${uniqueColOption}" non trouvé.`);
+                 return false;
+            }
+        }
+        
+        const success = this.stateManager._deleteRowById(rowId, uniqueColIndex);
+        if (success) {
+            // Ajuster currentPage si la dernière ligne d'une page est supprimée?
+            // Pour l'instant, laissons le render recalculer.
+            this.render(); 
+        }
+        return success;
+    }
+    public updateRowById(rowId: string | number, updatedRowData: any[]): boolean {
+        if (this.stateManager.getIsServerSide()) {
+            console.warn("updateRowById() a un effet limité en mode serveur. Les données doivent être gérées côté serveur.");
+        }
+        const uniqueColOption = this.options.uniqueRowIdColumn;
+        let uniqueColIndex = 0; // Default to first column
+        if (typeof uniqueColOption === 'number') {
+            uniqueColIndex = uniqueColOption;
+        } else if (typeof uniqueColOption === 'string') {
+            const foundIndex = this.options.columns.findIndex(col => col.name === uniqueColOption);
+            if (foundIndex !== -1) {
+                 uniqueColIndex = foundIndex;
+            } else {
+                 console.error(`updateRowById: Nom de colonne ID unique "${uniqueColOption}" non trouvé.`);
+                 return false;
+            }
+        }
+
+        const success = this.stateManager._updateRowById(rowId, updatedRowData, uniqueColIndex);
+        if (success) {
+            this.render(); // Re-render pour refléter les changements
+        }
+        return success;
     }
 
     // Récupère les données complètes des lignes sélectionnées

@@ -374,4 +374,68 @@ export class StateManager {
             console.error("[StateManager] Tentative de définir un ordre de colonnes invalide.", newOrder);
         }
     }
+
+    // --- Méthodes internes de manipulation de données (appelées par DataTable) ---
+
+    /** Ajoute une nouvelle ligne aux données originales. */
+    _addRow(newRowData: any[]): void {
+        // Valider si la longueur correspond au nombre de colonnes? Non, laisser flexible pour l'instant.
+        this.originalData.push(newRowData);
+        // En mode client, le total doit être recalculé
+        if (!this.isServerSide) {
+            this.totalRows = this.originalData.length;
+        } else {
+            // En mode serveur, on pourrait supposer que le total augmente, mais 
+            // il est plus sûr de laisser le serveur renvoyer le nouveau total lors du prochain fetch.
+            // this.totalRows++; // Optionnel: mise à jour optimiste
+        }
+        // Pas de sauvegarde d'état ici, la méthode publique s'en chargera après le render.
+        console.log("[StateManager._addRow] Row added. New total (client):", this.totalRows);
+    }
+
+    /** Met à jour une ligne existante par son ID. */
+    _updateRowById(rowId: string | number, updatedRowData: any[], uniqueColIndex: number): boolean {
+        const rowIndex = this.originalData.findIndex(row => row[uniqueColIndex] === rowId);
+        if (rowIndex === -1) {
+            console.warn(`[StateManager._updateRowById] Row with ID ${rowId} not found.`);
+            return false;
+        }
+        // Valider la longueur des données mises à jour?
+        if (updatedRowData.length !== this.options.columns.length) {
+             console.warn(`[StateManager._updateRowById] Updated data length (${updatedRowData.length}) does not match column count (${this.options.columns.length}). Updating anyway.`);
+        }
+        this.originalData[rowIndex] = updatedRowData;
+        console.log(`[StateManager._updateRowById] Row with ID ${rowId} updated at index ${rowIndex}.`);
+        // La mise à jour peut affecter les données affichées (si tri/filtre) -> le render s'en chargera
+        // Pas de sauvegarde d'état ici.
+        return true;
+    }
+
+    /** Supprime une ligne par son ID. */
+    _deleteRowById(rowId: string | number, uniqueColIndex: number): boolean {
+        const initialLength = this.originalData.length;
+        this.originalData = this.originalData.filter(row => row[uniqueColIndex] !== rowId);
+        
+        if (this.originalData.length === initialLength) {
+            console.warn(`[StateManager._deleteRowById] Row with ID ${rowId} not found.`);
+            return false;
+        }
+
+        // Supprimer des lignes sélectionnées aussi
+        if (this.selectedRowIds.has(rowId)) {
+            this.selectedRowIds.delete(rowId);
+             console.log(`[StateManager._deleteRowById] Row ID ${rowId} removed from selection.`);
+        }
+
+        // Mettre à jour le total en mode client
+        if (!this.isServerSide) {
+            this.totalRows = this.originalData.length;
+        } else {
+             // En mode serveur, laisser le serveur gérer le total
+             // this.totalRows--; // Optionnel: mise à jour optimiste
+        }
+        console.log(`[StateManager._deleteRowById] Row with ID ${rowId} deleted. New total (client):`, this.totalRows);
+        // Pas de sauvegarde d'état ici.
+        return true;
+    }
 } 

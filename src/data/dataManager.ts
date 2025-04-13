@@ -40,27 +40,42 @@ export function addRow(instance: DataTable, rowData: any[]): void {
 }
 
 export function deleteRowById(instance: DataTable, id: any, idColumnIndex: number = 0): boolean {
-    const initialLength = instance.stateManager.getOriginalData().length;
-    instance.stateManager.getOriginalData().filter(row => row[idColumnIndex] !== id);
-    const rowDeleted = instance.stateManager.getOriginalData().length < initialLength;
+    const originalData = instance.stateManager.getOriginalData();
+    const initialLength = originalData.length;
+    
+    // Trouver l'index de la ligne à supprimer
+    const rowIndexToDelete = originalData.findIndex(row => row[idColumnIndex] === id);
+
+    let rowDeleted = false;
+    // Si la ligne est trouvée, la supprimer avec splice
+    if (rowIndexToDelete !== -1) {
+        originalData.splice(rowIndexToDelete, 1); 
+        rowDeleted = true; // La suppression a eu lieu
+    } else {
+         console.warn(`deleteRowById: Aucune ligne trouvée avec l'ID ${id} dans la colonne ${idColumnIndex}.`);
+    }
+
+    // Continuer uniquement si une ligne a été effectivement supprimée
     if (rowDeleted) {
         if (instance.stateManager.getIsServerSide()) { 
-             console.warn("deleteRowById appelé en mode serveur...");
-             if (instance.options.serverSideTotalRows !== undefined) {
-                instance.stateManager.setTotalRows(instance.options.serverSideTotalRows - 1);
-             }
-             const totalPages = Math.max(1, Math.ceil(instance.stateManager.getTotalRows() / instance.stateManager.getRowsPerPage()));
-             if (instance.stateManager.getCurrentPage() > totalPages) {
-                 instance.stateManager.setCurrentPage(totalPages);
-             }
-              instance.render();
+            console.warn("deleteRowById appelé en mode serveur...");
+            if (instance.options.serverSideTotalRows !== undefined) {
+                // Mettre à jour le total. Attention, si l'ID n'existait pas, on le décrémente quand même ici.
+                // Idéalement, on devrait s'assurer que l'ID existe avant de décrémenter.
+                instance.stateManager.setTotalRows(instance.stateManager.getTotalRows() - 1); 
+            }
+            const totalPages = Math.max(1, Math.ceil(instance.stateManager.getTotalRows() / instance.stateManager.getRowsPerPage()));
+            if (instance.stateManager.getCurrentPage() > totalPages) {
+                instance.stateManager.setCurrentPage(totalPages);
+            }
+            instance.render();
         } else {
+            // Mettre à jour le totalRows pour le mode client aussi
+            instance.stateManager.setTotalRows(originalData.length);
             instance.render(); 
         }
-         dispatchEvent(instance, 'dt:dataChange', { source: 'deleteRowById', deletedId: id });
-    } else {
-        console.warn(`deleteRowById: Aucune ligne trouvée avec l'ID ${id} dans la colonne ${idColumnIndex}.`);
-    }
+        dispatchEvent(instance, 'dt:dataChange', { source: 'deleteRowById', deletedId: id });
+    } 
     return rowDeleted;
 }
 

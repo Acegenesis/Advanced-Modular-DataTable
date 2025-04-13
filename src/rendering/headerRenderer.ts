@@ -608,6 +608,18 @@ function handleMouseUp(event: MouseEvent) {
     savedInstance.stateManager.setColumnWidth(savedIndex as number, finalWidth);
     console.log(`[Resize Mouseup] Saved finalWidth=${finalWidth} for colIndex ${savedIndex}`);
 
+    // Émettre l'événement de redimensionnement de colonne
+    const resizeEvent = new CustomEvent('dt:columnResize', {
+        detail: {
+            columnIndex: savedIndex,
+            newWidth: finalWidth
+        },
+        bubbles: true, // Permet à l'événement de remonter dans le DOM
+        composed: true // Permet à l'événement de traverser les limites du Shadow DOM si nécessaire
+    });
+    thElement.dispatchEvent(resizeEvent);
+    console.log(`[Resize Mouseup] Dispatched dt:columnResize event for colIndex ${savedIndex}`);
+
     // Nettoyage des variables globales
     console.log('[Resize Mouseup] Cleaning up state...');
     isResizing = false;
@@ -844,6 +856,17 @@ function handleDrop(event: DragEvent, instance: DataTable, targetOriginalIndex: 
     
     console.log('[Drop] Calculated New Order:', newOrder);
     instance.stateManager.setColumnOrder(newOrder);
+
+    // Émettre l'événement de réorganisation de colonne
+    const reorderEvent = new CustomEvent('dt:columnReorder', {
+        detail: { columnOrder: newOrder },
+        bubbles: true,
+        composed: true
+    });
+    // Émettre depuis l'élément principal de la table
+    instance.element.dispatchEvent(reorderEvent); 
+    console.log(`[Drop] Dispatched dt:columnReorder event with order:`, newOrder);
+
     instance.render(); // Re-rendre pour appliquer le nouvel ordre
 
     // handleDragEnd sera appelé automatiquement par le navigateur pour nettoyer le style de l'élément glissé
