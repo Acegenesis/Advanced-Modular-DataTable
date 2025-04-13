@@ -16,7 +16,8 @@ import { exportToCSV } from "../features/exporting";
  * @param instance The DataTable instance.
  */
 export function render(instance: DataTable): void {
-    console.log('--- render() called ---'); // <-- Log
+    const state = instance.stateManager;
+
     // Garder une référence à l'overlay s'il existe
     const existingOverlay = instance.element.querySelector('.dt-loading-overlay') as HTMLElement | null;
 
@@ -41,7 +42,7 @@ export function render(instance: DataTable): void {
     leftToolbar.className = 'flex-grow'; // Prend l'espace disponible
     let searchElement: HTMLElement | null = null;
     if (instance.options.searching?.enabled) {
-        searchElement = renderSearchInput(instance);
+        searchElement = renderSearchInput(instance); // renderSearchInput accèdera à l'état via l'instance
         leftToolbar.appendChild(searchElement);
     }
     toolbarContainer.appendChild(leftToolbar);
@@ -56,8 +57,8 @@ export function render(instance: DataTable): void {
         clearFiltersButton = document.createElement('button');
         clearFiltersButton.textContent = 'Effacer Filtres';
         clearFiltersButton.className = 'px-3 py-1.5 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50';
-        // Désactiver si aucun filtre n'est actif
-        clearFiltersButton.disabled = !instance.filterTerm && instance.columnFilters.size === 0;
+        // Utiliser stateManager pour vérifier l'état des filtres
+        clearFiltersButton.disabled = !state.getFilterTerm() && state.getColumnFilters().size === 0;
         clearFiltersButton.addEventListener('click', () => instance.clearAllFilters());
         rightToolbar.appendChild(clearFiltersButton);
     }
@@ -70,7 +71,7 @@ export function render(instance: DataTable): void {
             exportButton = document.createElement('button');
             exportButton.textContent = 'Exporter CSV';
             exportButton.className = 'px-3 py-1.5 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500';
-            exportButton.addEventListener('click', () => exportToCSV(instance));
+            exportButton.addEventListener('click', () => exportToCSV(instance)); // exportToCSV accèdera à l'état via l'instance
             rightToolbar.appendChild(exportButton);
         }
     }
@@ -85,47 +86,46 @@ export function render(instance: DataTable): void {
         mainContainer.appendChild(toolbarContainer);
     }
 
-    // 2. Data Preparation (Client-side only)
-    let dataToDisplay = instance.isServerSide
-        ? [...instance.originalData]
-        : [...instance.originalData];
+    // 2. Data Preparation
+    let dataToDisplay: any[][];
+    let currentTotalRows = state.getTotalRows();
 
-    if (!instance.isServerSide) {
-        const filteredData = applyFilters(instance, dataToDisplay);
+    if (state.getIsServerSide()) {
+        dataToDisplay = state.getDisplayedData();
+    } else {
+        const originalClientData = state.getOriginalData();
+        const filteredData = applyFilters(instance, originalClientData);
         const sortedData = sortDataIfEnabled(instance, filteredData);
-        dataToDisplay = sortedData;
-        instance.totalRows = dataToDisplay.length;
+        state.setDisplayedData(sortedData);
+        dataToDisplay = state.getDisplayedData();
+        currentTotalRows = dataToDisplay.length;
     }
 
     // 3. Render Table Structure
     const tableContainer = document.createElement('div');
-    // Enlever la marge supérieure ici car la barre d'outils a maintenant une marge inférieure
     tableContainer.className = 'shadow overflow-x-auto border-b border-gray-200 sm:rounded-lg';
 
     const table = document.createElement('table');
-    table.className = 'min-w-full border-collapse table-fixed'; 
+    table.className = 'min-w-full border-collapse table-fixed';
     table.style.width = '100%';
     table.setAttribute('role', 'grid');
-    // Optional: Add aria-label or aria-labelledby for the table itself
-    // table.setAttribute('aria-label', 'Tableau de données'); 
 
     // 4. Render Header & Body
     renderHeader(instance, table);
-    renderStandardBody(instance, table, dataToDisplay); // Pass processed data
-    updateSelectAllCheckboxState(instance); // Update after body render
-   
+    renderStandardBody(instance, table, dataToDisplay);
+    updateSelectAllCheckboxState(instance);
+
     tableContainer.appendChild(table);
     mainContainer.appendChild(tableContainer);
     instance.element.appendChild(mainContainer);
 
-    // 5. Render Pagination Controls (if applicable)
-    // Pagination logic now considers totalRows which is correctly updated for client/server
-    if (instance.options.pagination?.enabled && instance.totalRows > instance.rowsPerPage) {
-        renderPaginationControls(instance); 
+    // 5. Render Pagination Controls
+    if (instance.options.pagination?.enabled && currentTotalRows > state.getRowsPerPage()) {
+        renderPaginationControls(instance);
     }
 
     // 6. Dispatch Render Complete Event
-    dispatchEvent(instance, 'dt:renderComplete');
+    dispatchEvent(instance, 'renderComplete');
 
     // 7. S'assurer que l'overlay est le dernier élément (pour le z-index)
     if (existingOverlay) {
@@ -135,25 +135,15 @@ export function render(instance: DataTable): void {
     // --- Restauration du focus ---
     const elementIdToFocus = instance.focusedElementId;
     if (elementIdToFocus) {
-        console.log(`[mainRenderer.render] Attempting to restore focus to ID: ${elementIdToFocus}`); // Log
         const elementToFocus = instance.element.querySelector(`#${elementIdToFocus}`) as HTMLElement;
         if (elementToFocus) {
-            console.log(`[mainRenderer.render] Element found:`, elementToFocus); // Log
-            // Retarder légèrement le focus
             requestAnimationFrame(() => {
-                 console.log(`[mainRenderer.render] Calling .focus() on ${elementIdToFocus}`); // Log
                 elementToFocus.focus();
-                // Si c'est un input texte, placer le curseur à la fin
                 if (elementToFocus instanceof HTMLInputElement && elementToFocus.type === 'text') {
-                     console.log(`[mainRenderer.render] Setting cursor position for ${elementIdToFocus}`); // Log
                     elementToFocus.setSelectionRange(elementToFocus.value.length, elementToFocus.value.length);
                 }
             });
-        } else {
-             console.log(`[mainRenderer.render] Element with ID ${elementIdToFocus} NOT FOUND after render.`); // Log
         }
         instance.focusedElementId = null; // Réinitialiser après tentative
-    } else {
-         console.log('[mainRenderer.render] No focus ID was memorized.'); // Log
     }
 } 

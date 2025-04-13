@@ -1,5 +1,5 @@
 import { DataTable } from "../core/DataTable";
-import { dispatchEvent } from "../events/dispatcher";
+import { dispatchEvent, dispatchSearchEvent, dispatchFilterChangeEvent } from "../events/dispatcher";
 import { ColumnFilterState } from "../core/types";
 
 // --- Global Search Feature ---
@@ -8,21 +8,14 @@ import { ColumnFilterState } from "../core/types";
  * Creates and returns the search input field element.
  */
 export function renderSearchInput(instance: DataTable): HTMLInputElement {
-    // const inputId = `datatable-search-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`; // <-- Ancien ID instable
-    const inputId = `${instance.element.id}-global-search`; // <-- Nouvel ID stable
-    // Le label est maintenant implicite ou doit être ajouté séparément si besoin
-    // const label = document.createElement('label');
-    // label.htmlFor = inputId;
-    // label.className = 'sr-only';
-    // label.textContent = instance.isServerSide ? 'Rechercher dans les données' : 'Filtrer le tableau';
-    // parentElement.appendChild(label);
+    const state = instance.stateManager;
+    const inputId = `${instance.element.id}-global-search`;
 
     const searchInput = document.createElement('input');
     searchInput.type = 'search';
     searchInput.placeholder = 'Rechercher...';
-    // Ajustement des classes: plus de mb-4 ici, géré par le conteneur parent
     searchInput.className = 'dt-global-search-input block w-full md:w-1/2 px-4 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm';
-    searchInput.value = instance.filterTerm;
+    searchInput.value = state.getFilterTerm();
     searchInput.id = inputId;
     searchInput.setAttribute('role', 'searchbox');
     searchInput.setAttribute('aria-controls', instance.element.id + '-tbody');
@@ -37,16 +30,17 @@ export function renderSearchInput(instance: DataTable): HTMLInputElement {
         }
 
         instance.debounceTimer = window.setTimeout(() => {
-            instance.filterTerm = searchTerm;
-            instance.currentPage = 1;
-            dispatchEvent(instance, 'dt:search', { searchTerm: instance.filterTerm });
-            if (!instance.isServerSide) {
+            state.setFilterTerm(searchTerm);
+            state.setCurrentPage(1);
+            dispatchSearchEvent(instance);
+            if (state.getIsServerSide() && instance.options.serverSide?.fetchData) {
+                 instance.fetchData();
+            } else if (!state.getIsServerSide()) {
                  instance.render();
             }
         }, debounceTime);
     });
-    // parentElement.appendChild(searchInput); // <-- Supprimé
-    return searchInput; // <-- Retourne l'élément
+    return searchInput;
 }
 
 // --- Combined Filtering Logic (Global Search + Column Filters) ---
@@ -59,12 +53,12 @@ export function renderSearchInput(instance: DataTable): HTMLInputElement {
  */
 export function applyFilters(instance: DataTable, data: any[][]): any[][] {
     let filteredData = data;
+    const state = instance.stateManager;
 
-    // 1. Apply Global Search Filter (if enabled and term exists)
-    if (instance.options.searching?.enabled && instance.filterTerm) {
-        // Trim() le terme de recherche globale
-        const searchTermLower = instance.filterTerm.trim().toLowerCase();
-        // Filtrer seulement si le terme n'est pas vide après trim()
+    // 1. Apply Global Search Filter
+    const globalFilterTerm = state.getFilterTerm();
+    if (instance.options.searching?.enabled && globalFilterTerm) {
+        const searchTermLower = globalFilterTerm.trim().toLowerCase();
         if (searchTermLower) {
             filteredData = filteredData.filter(row => {
                 for (let cellIndex = 0; cellIndex < row.length; cellIndex++) {
@@ -81,12 +75,13 @@ export function applyFilters(instance: DataTable, data: any[][]): any[][] {
         }
     }
 
-    // 2. Apply Column Filters (if enabled and filters exist)
-    if (instance.options.columnFiltering?.enabled && instance.columnFilters.size > 0) {
-        console.log("[applyFilters] Applying column filters:", instance.columnFilters);
+    // 2. Apply Column Filters
+    const columnFilters = state.getColumnFilters();
+    if (instance.options.columnFiltering?.enabled && columnFilters.size > 0) {
+        console.log("[applyFilters] Applying column filters:", columnFilters);
         filteredData = filteredData.filter(row => {
             // console.log("[applyFilters] Checking row:", row);
-            for (const [columnIndex, filterState] of instance.columnFilters.entries()) {
+            for (const [columnIndex, filterState] of columnFilters.entries()) {
                 if (!filterState || filterState.value === null || filterState.value === undefined) continue;
 
                 const cellData = row[columnIndex];

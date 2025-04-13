@@ -11,12 +11,13 @@ import { PaginationStyle } from "../core/types";
  * @returns The data array for the current page.
  */
 export function getCurrentPageData(instance: DataTable, sourceData: any[][]): any[][] {
-    if (!instance.options.pagination?.enabled || instance.isServerSide) {
-        // Pagination is handled server-side or disabled
-        return sourceData; 
+    const state = instance.stateManager;
+    if (!instance.options.pagination?.enabled || state.getIsServerSide()) {
+        return sourceData;
     }
-    const startIndex = (instance.currentPage - 1) * instance.rowsPerPage;
-    const endIndex = startIndex + instance.rowsPerPage;
+    const rowsPerPage = state.getRowsPerPage();
+    const startIndex = (state.getCurrentPage() - 1) * rowsPerPage;
+    const endIndex = startIndex + rowsPerPage;
     return sourceData.slice(startIndex, endIndex);
 }
 
@@ -24,6 +25,7 @@ export function getCurrentPageData(instance: DataTable, sourceData: any[][]): an
  * Crée un bouton de pagination individuel.
  */
 function createPageButton(instance: DataTable, pageNumber: number, isCurrent: boolean = false): HTMLButtonElement {
+    const state = instance.stateManager;
     const button = document.createElement('button');
     button.textContent = pageNumber.toString();
     button.className = `relative inline-flex items-center px-4 py-2 border text-sm font-medium focus:z-10 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition ease-in-out duration-150 disabled:opacity-50 disabled:cursor-not-allowed`;
@@ -36,9 +38,9 @@ function createPageButton(instance: DataTable, pageNumber: number, isCurrent: bo
         button.className += ' bg-white border-gray-300 text-gray-500 hover:bg-gray-50';
         button.setAttribute('aria-label', `Aller à la page ${pageNumber}`);
         button.addEventListener('click', () => {
-            instance.currentPage = pageNumber;
+            state.setCurrentPage(pageNumber);
             dispatchPageChangeEvent(instance);
-            if (!instance.isServerSide) {
+            if (!state.getIsServerSide()) {
                 instance.render();
             }
         });
@@ -60,7 +62,8 @@ function createEllipsisElement(): HTMLSpanElement {
  * Renders the pagination controls based on the selected style.
  * @param instance The DataTable instance.
  */
-export function renderPaginationControls(instance: DataTable): void {
+export function renderPaginationControls(instance: DataTable, displayRowCount: number): void {
+    const state = instance.stateManager;
     let paginationContainer = instance.element.querySelector('#dt-pagination-controls');
     if (paginationContainer) { paginationContainer.remove(); } // Remove old controls
 
@@ -75,10 +78,13 @@ export function renderPaginationControls(instance: DataTable): void {
     paginationContainer.setAttribute('role', 'navigation');
     paginationContainer.setAttribute('aria-label', 'Pagination');
 
-    const currentTotalRows = instance.totalRows;
-    const totalPages = Math.ceil(currentTotalRows / instance.rowsPerPage);
-    const startItem = currentTotalRows === 0 ? 0 : (instance.currentPage - 1) * instance.rowsPerPage + 1;
-    const endItem = Math.min(startItem + instance.rowsPerPage - 1, currentTotalRows);
+    const currentTotalRows = state.getTotalRows();
+    const displayRows = state.getIsServerSide() ? currentTotalRows : state.getDisplayedData().length;
+    const rowsPerPage = state.getRowsPerPage();
+    const currentPage = state.getCurrentPage();
+    const totalPages = Math.ceil(displayRows / rowsPerPage);
+    const startItem = displayRows === 0 ? 0 : (currentPage - 1) * rowsPerPage + 1;
+    const endItem = Math.min(startItem + rowsPerPage - 1, displayRows);
 
     // --- Contenu par défaut des boutons ---
     const defaultPrevContent = `<svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>`;
@@ -96,8 +102,8 @@ export function renderPaginationControls(instance: DataTable): void {
     infoContainer.className = 'text-sm text-gray-700 hidden sm:block'; // Info cachée sur petit écran
     infoContainer.setAttribute('aria-live', 'polite');
     const p = document.createElement('p');
-    if (currentTotalRows > 0) {
-        p.innerHTML = `Affichage <span class="font-medium text-gray-900">${startItem}</span> à <span class="font-medium text-gray-900">${endItem}</span> sur <span class="font-medium text-gray-900">${currentTotalRows}</span> résultats`;
+    if (displayRows > 0) {
+        p.innerHTML = `Affichage <span class="font-medium text-gray-900">${startItem}</span> à <span class="font-medium text-gray-900">${endItem}</span> sur <span class="font-medium text-gray-900">${displayRows}</span> résultats`;
     } else {
         p.textContent = 'Aucun résultat';
     }
@@ -112,31 +118,31 @@ export function renderPaginationControls(instance: DataTable): void {
 
     // Previous Button (commun à tous les styles > simple)
     const prevButton = document.createElement('button');
-    prevButton.disabled = instance.currentPage === 1;
+    prevButton.disabled = currentPage === 1;
     prevButton.className = 'relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 focus:z-10 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition ease-in-out duration-150';
     prevButton.setAttribute('aria-label', 'Page précédente');
     if (prevButton.disabled) prevButton.setAttribute('aria-disabled', 'true');
     prevButton.innerHTML = prevContent;
     if (!prevButton.disabled) {
         prevButton.addEventListener('click', () => {
-            instance.currentPage--;
+            state.setCurrentPage(currentPage - 1);
             dispatchPageChangeEvent(instance);
-            if (!instance.isServerSide) instance.render();
+            if (!state.getIsServerSide()) instance.render();
         });
     }
 
     // Next Button (commun à tous les styles > simple)
     const nextButton = document.createElement('button');
-    nextButton.disabled = instance.currentPage === totalPages || currentTotalRows === 0;
+    nextButton.disabled = currentPage === totalPages || displayRows === 0;
     nextButton.className = 'relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 focus:z-10 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition ease-in-out duration-150';
     nextButton.setAttribute('aria-label', 'Page suivante');
     if (nextButton.disabled) nextButton.setAttribute('aria-disabled', 'true');
     nextButton.innerHTML = nextContent;
     if (!nextButton.disabled) {
         nextButton.addEventListener('click', () => {
-            instance.currentPage++;
+            state.setCurrentPage(currentPage + 1);
             dispatchPageChangeEvent(instance);
-            if (!instance.isServerSide) instance.render();
+            if (!state.getIsServerSide()) instance.render();
         });
     }
 
@@ -146,25 +152,25 @@ export function renderPaginationControls(instance: DataTable): void {
         // Style Simple: Boutons Previous/Next uniquement (utilisé pour mobile aussi)
         const simplePrev = document.createElement('button');
         simplePrev.textContent = paginationOptions.previousButtonContent?.replace(/<[^>]*>/g, '') || 'Précédent';
-        simplePrev.disabled = instance.currentPage === 1;
+        simplePrev.disabled = currentPage === 1;
         simplePrev.className = 'relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed';
         if (!simplePrev.disabled) {
             simplePrev.addEventListener('click', () => {
-                instance.currentPage--;
+                state.setCurrentPage(currentPage - 1);
                 dispatchPageChangeEvent(instance);
-                if (!instance.isServerSide) instance.render();
+                if (!state.getIsServerSide()) instance.render();
             });
         }
 
         const simpleNext = document.createElement('button');
         simpleNext.textContent = paginationOptions.nextButtonContent?.replace(/<[^>]*>/g, '') || 'Suivant';
-        simpleNext.disabled = instance.currentPage === totalPages || currentTotalRows === 0;
+        simpleNext.disabled = currentPage === totalPages || displayRows === 0;
         simpleNext.className = 'ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed';
         if (!simpleNext.disabled) {
             simpleNext.addEventListener('click', () => {
-                instance.currentPage++;
+                state.setCurrentPage(currentPage + 1);
                 dispatchPageChangeEvent(instance);
-                if (!instance.isServerSide) instance.render();
+                if (!state.getIsServerSide()) instance.render();
             });
         }
         rightContainer.appendChild(simplePrev);
@@ -181,30 +187,30 @@ export function renderPaginationControls(instance: DataTable): void {
         // Page Number Buttons Logic (commun à 'numbered' et 'numbered-jump')
         const maxVisiblePages = 7; // Max buttons: 1 ... 3 4 5 ... 10 (example)
         const sidePages = Math.floor((maxVisiblePages - 3) / 2);
-        let startPage = Math.max(2, instance.currentPage - sidePages);
-        let endPage = Math.min(totalPages - 1, instance.currentPage + sidePages);
+        let startPage = Math.max(2, currentPage - sidePages);
+        let endPage = Math.min(totalPages - 1, currentPage + sidePages);
 
-        if (instance.currentPage - sidePages <= 2) {
+        if (currentPage - sidePages <= 2) {
             endPage = Math.min(totalPages - 1, maxVisiblePages - 2);
         }
-        if (instance.currentPage + sidePages >= totalPages - 1) {
+        if (currentPage + sidePages >= totalPages - 1) {
             startPage = Math.max(2, totalPages - (maxVisiblePages - 3));
         }
 
         if (totalPages > 0) {
-            navContainer.appendChild(createPageButton(instance, 1, instance.currentPage === 1));
+            navContainer.appendChild(createPageButton(instance, 1, currentPage === 1));
         }
         if (startPage > 2) {
             navContainer.appendChild(createEllipsisElement());
         }
         for (let i = startPage; i <= endPage; i++) {
-            navContainer.appendChild(createPageButton(instance, i, instance.currentPage === i));
+            navContainer.appendChild(createPageButton(instance, i, currentPage === i));
         }
         if (endPage < totalPages - 1) {
             navContainer.appendChild(createEllipsisElement());
         }
         if (totalPages > 1) {
-            navContainer.appendChild(createPageButton(instance, totalPages, instance.currentPage === totalPages));
+            navContainer.appendChild(createPageButton(instance, totalPages, currentPage === totalPages));
         }
 
         navContainer.appendChild(nextButton);
@@ -226,9 +232,9 @@ export function renderPaginationControls(instance: DataTable): void {
             jumpInput.name = 'jump-page';
             jumpInput.min = '1';
             jumpInput.max = totalPages.toString();
-            jumpInput.value = instance.currentPage.toString();
+            jumpInput.value = currentPage.toString();
             jumpInput.className = 'w-16 px-2 py-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500';
-            jumpInput.setAttribute('aria-label', `Page actuelle ${instance.currentPage}, entrer le numéro de page pour y sauter`);
+            jumpInput.setAttribute('aria-label', `Page actuelle ${currentPage}, entrer le numéro de page pour y sauter`);
 
             const jumpButton = document.createElement('button');
             jumpButton.textContent = jumpText;
@@ -237,16 +243,19 @@ export function renderPaginationControls(instance: DataTable): void {
 
             const goToPage = () => {
                 const page = parseInt(jumpInput.value, 10);
-                if (!isNaN(page) && page >= 1 && page <= totalPages && page !== instance.currentPage) {
-                    instance.currentPage = page;
+                if (!isNaN(page) && page >= 1 && page <= totalPages && page !== currentPage) {
+                    state.setCurrentPage(page);
                     dispatchPageChangeEvent(instance);
-                    if (!instance.isServerSide) {
+                    if (!state.getIsServerSide()) {
                         instance.render();
                     } else {
-                        // jumpInput.value = instance.currentPage.toString(); // Optionnel
+                        // En mode serveur, le fetchData sera déclenché par dispatchPageChangeEvent -> DataTable
+                        // Mettre à jour l'input ici peut être prématuré si le fetch échoue
+                        // jumpInput.value = state.getCurrentPage().toString(); // <- Mieux vaut attendre le prochain render
                     }
                 } else {
-                    jumpInput.value = instance.currentPage.toString();
+                    // Remettre la valeur actuelle si l'entrée est invalide
+                    jumpInput.value = state.getCurrentPage().toString();
                 }
             };
 
@@ -273,7 +282,7 @@ export function renderPaginationControls(instance: DataTable): void {
     if (totalPages <= 1 && paginationStyle === 'simple') {
          // Option: Cacher complètement si pas de pagination nécessaire pour 'simple'
          // paginationContainer.style.display = 'none';
-    } else if (totalPages <= 0) {
+    } else if (displayRows <= 0) {
         // Toujours afficher le message 'Aucun résultat'
         rightContainer.innerHTML = ''; // Vider les contrôles si pas de résultats
     }

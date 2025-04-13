@@ -142,6 +142,7 @@ function createAdvancedTextFilterPopup(instance: DataTable, columnIndex: number,
  * @param table The TABLE element.
  */
 export function renderHeader(instance: DataTable, table: HTMLTableElement): void {
+    const state = instance.stateManager; // Référence au stateManager
     let thead = table.tHead;
     if (thead) {
         table.removeChild(thead);
@@ -157,7 +158,7 @@ export function renderHeader(instance: DataTable, table: HTMLTableElement): void
     headerRow.setAttribute('role', 'row');
 
     // "Select All" Checkbox Column (if needed)
-    if (instance.selectionEnabled && instance.selectionMode === 'multiple') {
+    if (state.getSelectionEnabled() && state.getSelectionMode() === 'multiple') {
         const thCheckbox = document.createElement('th');
         thCheckbox.scope = 'col';
         thCheckbox.setAttribute('role', 'columnheader');
@@ -234,118 +235,113 @@ export function renderHeader(instance: DataTable, table: HTMLTableElement): void
 
             let indicatorSvg = svgUnsorted;
             let ariaSortValue: "ascending" | "descending" | "none" = "none";
-            // let sortDescription = 'non trié'; // Plus nécessaire ici si la descr. reste sur le titre?
 
-            if (instance.sortColumnIndex === index && instance.sortDirection !== 'none') {
-                indicatorSvg = instance.sortDirection === 'asc' ? svgAsc : svgDesc;
-                ariaSortValue = instance.sortDirection === 'asc' ? 'ascending' : 'descending';
+            // Utilisation de stateManager pour sortColumnIndex et sortDirection
+            const currentSortIndex = state.getSortColumnIndex();
+            const currentSortDirection = state.getSortDirection();
+
+            if (currentSortIndex === index && currentSortDirection !== 'none') {
+                indicatorSvg = currentSortDirection === 'asc' ? svgAsc : svgDesc;
+                ariaSortValue = currentSortDirection === 'asc' ? 'ascending' : 'descending';
                 th.classList.add('bg-gray-100');
-                // sortDescription = ...
             }
+            th.setAttribute('aria-sort', ariaSortValue);
 
             // Créer le span pour l'indicateur
             const indicatorSpan = document.createElement('span');
-            indicatorSpan.className = 'sort-indicator'; // Classe simple pour identification
+            indicatorSpan.className = 'sort-indicator ml-1'; // Ajouter ml-1 pour espace
             indicatorSpan.setAttribute('aria-hidden', 'true');
             indicatorSpan.innerHTML = indicatorSvg;
-            // **Ajouter l'indicateur au conteneur droite**
-            sortFilterContainer.appendChild(indicatorSpan);
-            th.setAttribute('aria-sort', ariaSortValue);
-
-            // Note: La description sr-only pourrait rester attachée au titre ou être supprimée.
-            // Si on la garde, elle doit être ajoutée au titleContainer plus haut.
+            sortFilterContainer.appendChild(indicatorSpan); // Ajouter au conteneur droite
         }
 
-        // Filter Control
-        if (instance.options.columnFiltering?.enabled && columnDef.filterType) {
-            const filterControlContainer = document.createElement('div');
-            // **Plus besoin de marge ici, gérée par space-x-1 du parent**
-            filterControlContainer.className = 'dt-filter-control flex-shrink-0';
+        // Filtering UI (si activé globalement et pour cette colonne)
+        const isGloballyFilterable = instance.options.columnFiltering?.enabled;
+        const filterType = columnDef.filterType;
+        if (isGloballyFilterable && filterType) {
+            // Utilisation de stateManager pour récupérer l'état du filtre de colonne
+            const currentFilter = state.getColumnFilters().get(index);
+            const filterContainer = document.createElement('div');
+            filterContainer.className = 'dt-filter-control'; // Classe pour empêcher le tri au clic
 
-            const currentFilterState = instance.columnFilters.get(index);
-
-            switch (columnDef.filterType) {
+            switch (filterType) {
                 case 'text':
-                    const operatorButton = document.createElement('button');
-                    operatorButton.type = 'button';
-                    operatorButton.className = 'dt-filter-operator-button p-1 border border-transparent rounded-md hover:bg-gray-200 focus:outline-none focus:ring-1 focus:ring-indigo-500';
-                    operatorButton.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-gray-500 hover:text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L16 11.414V17a1 1 0 01-.293.707l-4 4A1 1 0 0111 21.414V11.414L3.293 6.707A1 1 0 013 6V4z" /></svg>`;
-                    operatorButton.setAttribute('aria-label', `Filtrer ${columnDef.title}`);
-                    if (currentFilterState && currentFilterState.value) {
-                        operatorButton.querySelector('svg')?.classList.remove('text-gray-500');
-                        operatorButton.querySelector('svg')?.classList.add('text-indigo-600');
-                        operatorButton.classList.add('bg-indigo-50');
-                    }
-                    operatorButton.addEventListener('click', (event) => {
-                        event.stopPropagation();
-                        createAdvancedTextFilterPopup(instance, index, columnDef, currentFilterState, operatorButton);
+                    // Bouton pour popup avancée
+                    const filterButton = document.createElement('button');
+                    filterButton.type = 'button';
+                    filterButton.className = 'dt-filter-operator-button p-1 text-gray-400 hover:text-gray-600 focus:outline-none focus:ring-1 focus:ring-indigo-500 rounded';
+                    // Utiliser un entonnoir plein si le filtre est actif
+                    filterButton.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="${currentFilter ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="${currentFilter ? 0 : 1.5}"><path fill-rule="evenodd" d="M3 3a1 1 0 011-1h12a1 1 0 011 1v3a1 1 0 01-.293.707L13 10.414V17a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6.586L3.293 6.707A1 1 0 013 6V3z" clip-rule="evenodd" /></svg>`;
+                    filterButton.setAttribute('aria-label', `Options de filtre pour ${columnDef.title}`)
+                    filterButton.setAttribute('aria-haspopup', 'true');
+                    filterButton.addEventListener('click', (e) => {
+                        e.stopPropagation(); // Empêcher le tri
+                        createAdvancedTextFilterPopup(instance, index, columnDef, currentFilter, filterButton);
                     });
-                    filterControlContainer.appendChild(operatorButton);
+                    filterContainer.appendChild(filterButton);
                     break;
 
                 case 'select':
-                    const selectElement = document.createElement('select');
-                    selectElement.className = 'w-full max-w-[100px] px-1 py-0.5 border border-gray-300 rounded-md shadow-sm text-xs focus:outline-none focus:ring-indigo-500 focus:border-indigo-500';
-                    selectElement.id = `col-filter-${instance.element.id}-${index}`;
-                    selectElement.value = String(currentFilterState?.value ?? '');
-                    selectElement.setAttribute('aria-label', `Filtrer par ${columnDef.title}`);
+                    const selectFilter = document.createElement('select');
+                    selectFilter.className = 'ml-2 dt-column-filter-input w-full border-gray-300 rounded-md shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 text-xs py-1'; // Adapté pour être petit
+                    selectFilter.id = `${instance.element.id}-col-filter-${index}`;
+                    selectFilter.setAttribute('aria-label', `Filtrer ${columnDef.title}`);
+                    selectFilter.addEventListener('click', e => e.stopPropagation()); // Empêcher tri
+
+                    // Option vide par défaut
                     const defaultOption = document.createElement('option');
                     defaultOption.value = '';
-                    defaultOption.textContent = columnDef.filterPlaceholder || 'Tous';
-                    selectElement.appendChild(defaultOption);
-                    if (columnDef.filterOptions) {
-                        columnDef.filterOptions.forEach(option => {
-                            const optionElement = document.createElement('option');
-                            let optionValue: string;
-                            let optionLabel: string;
+                    defaultOption.textContent = columnDef.filterPlaceholder || 'Tout';
+                    selectFilter.appendChild(defaultOption);
 
-                            if (typeof option === 'string') {
-                                optionValue = option;
-                                optionLabel = option;
-                            } else { // C'est un objet { value: any; label: string }
-                                optionValue = String(option.value); // S'assurer que c'est une chaîne
-                                optionLabel = option.label;
-                            }
-                            optionElement.value = optionValue;
-                            optionElement.textContent = optionLabel;
-
-                            // Sélectionner la valeur actuelle
-                            if (currentFilterState && optionValue === String(currentFilterState.value)) {
-                                optionElement.selected = true;
-                            }
-                            selectElement.appendChild(optionElement);
-                        });
-                    }
-                    selectElement.addEventListener('change', (event) => {
-                        event.stopPropagation();
-                        const value = (event.target as HTMLSelectElement).value;
-                        instance.setColumnFilter(index, { value: value || null, operator: 'equals' });
+                    // Remplir les options
+                    columnDef.filterOptions?.forEach(option => {
+                        const opt = document.createElement('option');
+                        if (typeof option === 'string') {
+                            opt.value = option;
+                            opt.textContent = option;
+                        } else {
+                            opt.value = String(option.value);
+                            opt.textContent = option.label;
+                        }
+                        // Sélectionner l'option actuelle si un filtre est appliqué
+                        if (currentFilter && String(currentFilter.value) === opt.value) {
+                            opt.selected = true;
+                        }
+                        selectFilter.appendChild(opt);
                     });
-                    selectElement.addEventListener('click', e => e.stopPropagation());
-                    filterControlContainer.appendChild(selectElement);
+
+                    selectFilter.addEventListener('change', (event) => {
+                        const selectedValue = (event.target as HTMLSelectElement).value;
+                        if (selectedValue) {
+                            instance.setColumnFilter(index, { value: selectedValue, operator: 'equals' });
+                        } else {
+                            instance.setColumnFilter(index, null); // Effacer le filtre
+                        }
+                    });
+                    filterContainer.appendChild(selectFilter);
                     break;
+
+                // Ajouter d'autres types de filtres ici (range, date...)
             }
-            // **Ajouter le contrôle de filtre au conteneur droite**
-            sortFilterContainer.appendChild(filterControlContainer);
+            sortFilterContainer.appendChild(filterContainer);
         }
 
-        // Ajouter le conteneur droite (tri/filtre) seulement s'il contient quelque chose
+        // Ajouter le conteneur droite (Tri + Filtre) s'il contient quelque chose
         if (sortFilterContainer.hasChildNodes()) {
-             cellContentContainer.appendChild(sortFilterContainer);
+            cellContentContainer.appendChild(sortFilterContainer);
         }
 
         th.appendChild(cellContentContainer);
         headerRow.appendChild(th);
     });
 
-    // Actions Column Header (if needed)
+    // Action Column Header (if needed)
     if (instance.options.rowActions && instance.options.rowActions.length > 0) {
         const thActions = document.createElement('th');
         thActions.scope = 'col';
-        thActions.setAttribute('role', 'columnheader');
-        thActions.className = 'px-6 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider whitespace-nowrap overflow-hidden text-ellipsis align-middle';
+        thActions.className = 'px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider w-24'; // Largeur fixe?
         thActions.textContent = 'Actions';
-        thActions.style.boxSizing = 'border-box';
         headerRow.appendChild(thActions);
     }
 } 

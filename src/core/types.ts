@@ -1,18 +1,26 @@
+// Type pour l'identifiant unique d'une ligne
+export type RowId = string | number;
+
+// Type générique pour représenter une ligne de données (tableau où le premier élément est l'ID)
+// NOTE: Une structure objet { id: T, ... } serait plus explicite mais demanderait plus de refactoring.
+export type RowData<T extends RowId> = [T, ...any[]];
+
 // Types pour définir une colonne
 export interface ColumnDefinition {
-    title: string; 
-    type?: 'string' | 'number' | 'mail' | 'tel' | 'money'; 
-    render?: (cellData: any, rowData: any[]) => string | HTMLElement | DocumentFragment; 
-    sortable?: boolean; 
-    searchable?: boolean; 
-    locale?: string; 
-    currency?: string; 
-    width?: string; // Nouvelle propriété optionnelle pour la largeur (ex: '150px', '20%')
-    // --- Options de filtrage par colonne ---
-    filterType?: 'text' | 'select'; // Ajouter 'number-range', 'date-range' plus tard
-    filterOptions?: string[] | { value: any; label: string }[]; // Pour filterType = 'select'
-    filterPlaceholder?: string; // Pour filterType = 'text'
-    filterOperators?: TextFilterOperator[]; // Opérateurs autorisés pour filterType = 'text'
+    title: string;
+    data?: string;
+    name?: string;
+    type?: 'string' | 'number' | 'mail' | 'tel' | 'money';
+    render?: (cellData: any, rowData: any[]) => string | HTMLElement | DocumentFragment;
+    sortable?: boolean;
+    searchable?: boolean;
+    locale?: string;
+    currency?: string;
+    width?: string;
+    filterType?: 'text' | 'select';
+    filterOptions?: string[] | { value: any; label: string }[];
+    filterPlaceholder?: string;
+    filterOperators?: TextFilterOperator[];
 }
 
 // Interface pour les actions
@@ -22,17 +30,17 @@ export interface RowAction {
     className?: string;   
 }
 
-// Options principales
+// Options principales - Revenir à non générique
 export interface DataTableOptions {
-    columns: ColumnDefinition[]; 
-    data: any[][];    
+    columns: ColumnDefinition[];
+    data?: any[][]; // Revenir à any[][]
     pagination?: {
         enabled: boolean;
         rowsPerPage?: number; 
         style?: PaginationStyle;
-        previousButtonContent?: string; // Contenu HTML/texte pour le bouton Précédent
-        nextButtonContent?: string;     // Contenu HTML/texte pour le bouton Suivant
-        jumpButtonText?: string;        // Texte pour le bouton "Go" du saut de page
+        previousButtonContent?: string;
+        nextButtonContent?: string;
+        jumpButtonText?: string;
     };
     sorting?: {
         enabled: boolean;
@@ -42,32 +50,35 @@ export interface DataTableOptions {
         debounceTime?: number; 
     };
     rowActions?: RowAction[];
-    processingMode?: 'client' | 'server'; // 'client' (default) or 'server'
-    serverSideTotalRows?: number;      // Required if processingMode is 'server'
+    processingMode?: 'client' | 'server';
+    serverSideTotalRows?: number;
+    serverSide?: {
+        fetchData: (params: ServerSideParams) => Promise<ServerSideResponse>;
+    };
     selection?: {
         enabled: boolean;
-        mode?: 'single' | 'multiple'; // Défaut 'multiple' si activé
-        initialSelectedIds?: any[];   // IDs des lignes initialement sélectionnées (basé sur rowData[0])
+        mode?: 'single' | 'multiple';
+        initialSelectedIds?: any[]; // Revenir à any[]
     };
-    loadingMessage?: string; // Message à afficher pendant le chargement
+    loadingMessage?: string;
     exporting?: {
-        csv?: CsvExportOptions | boolean; // Activer/configurer l'export CSV
+        csv?: CsvExportOptions | boolean;
         // excel?: boolean; // Option future pour Excel
     };
     // Nouvelle option globale pour activer/désactiver les filtres de colonne
     columnFiltering?: {
         enabled: boolean;
-        showClearButton?: boolean; // Afficher un bouton "Effacer tous les filtres" ?
+        showClearButton?: boolean;
     };
 }
 
 // Options spécifiques à l'export CSV
 export interface CsvExportOptions {
-    enabled?: boolean; // Garder une option enabled explicite si c'est un objet
+    enabled?: boolean;
     delimiter?: string;
     encoding?: string;
     filename?: string;
-    bom?: boolean; // Optionnel: Ajouter un BOM (Byte Order Mark) pour UTF-8 ? (utile pour Excel)
+    bom?: boolean;
 }
 
 // Opérateurs pour les filtres texte
@@ -83,8 +94,33 @@ export type TextFilterOperator =
 // État d'un filtre de colonne individuel
 export type ColumnFilterState = {
     value: string | number | { value: any; label: string } | null;
-    operator?: TextFilterOperator; // Opérateur pour les filtres texte
+    operator?: TextFilterOperator;
 } | null;
 
 export type SortDirection = 'asc' | 'desc' | 'none';
-export type PaginationStyle = 'simple' | 'numbered' | 'numbered-jump'; 
+export type PaginationStyle = 'simple' | 'numbered' | 'numbered-jump';
+
+// Interface pour les paramètres envoyés au serveur
+export interface ServerSideParams {
+    draw: number;
+    start: number;
+    length: number;
+    search: { value: string; regex: boolean };
+    order: { column: number; dir: SortDirection }[];
+    columns: {
+        data: string | undefined;
+        name: string | undefined;
+        searchable: boolean;
+        orderable: boolean;
+        search: { value: string; regex: boolean };
+    }[];
+}
+
+// Interface pour la réponse attendue du serveur - Revenir à non générique
+export interface ServerSideResponse {
+    draw?: number;
+    recordsTotal: number;
+    recordsFiltered: number;
+    data: any[][]; // Revenir à any[][]
+    error?: string;
+} 

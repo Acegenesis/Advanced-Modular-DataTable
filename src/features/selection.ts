@@ -12,39 +12,23 @@ import { getCurrentPageData } from "./pagination";
  * @param isChecked The new checked state.
  */
 export function handleSelectAllClick(instance: DataTable, isChecked: boolean): void {
-    if (!instance.selectionEnabled || instance.selectionMode !== 'multiple') return;
+    const state = instance.stateManager;
+    if (!state.getSelectionEnabled() || state.getSelectionMode() !== 'multiple') return;
 
-    const allRelevantData = getCurrentFilteredSortedData(instance); 
+    const allRelevantData = getCurrentFilteredSortedData(instance);
+    const allRelevantIds = new Set(allRelevantData.map(row => row[0]));
 
-    allRelevantData.forEach(rowData => {
-        const rowId = rowData[0]; 
-        if (isChecked) {
-            instance.selectedRowIds.add(rowId);
-        } else {
-            instance.selectedRowIds.delete(rowId);
-        }
-    });
-
-    // Update UI for visible rows
-    const tbody = instance.element.querySelector(`#${instance.element.id}-tbody`);
-    if (tbody) {
-        const rows = tbody.querySelectorAll('tr[role="row"]');
-        rows.forEach((rowElement) => {
-            const checkbox = rowElement.querySelector('input[type="checkbox"]') as HTMLInputElement | null;
-            if (checkbox) {
-                checkbox.checked = isChecked;
-            }
-            if (isChecked) {
-                rowElement.classList.add('dt-row-selected', 'bg-indigo-50');
-                rowElement.setAttribute('aria-selected', 'true');
-            } else {
-                rowElement.classList.remove('dt-row-selected', 'bg-indigo-50');
-                rowElement.setAttribute('aria-selected', 'false');
-            }
-        });
+    // 1. Update state
+    if (isChecked) {
+        state.selectAll(allRelevantIds);
+    } else {
+        state.deselectAll(allRelevantIds);
     }
 
-    updateSelectAllCheckboxState(instance); 
+    // 2. Update UI by re-rendering
+    instance.render();
+
+    // 3. Dispatch change event (SelectAll state is updated during render)
     dispatchSelectionChangeEvent(instance);
 }
 
@@ -53,50 +37,48 @@ export function handleSelectAllClick(instance: DataTable, isChecked: boolean): v
  * @param instance The DataTable instance.
  * @param rowId The ID of the clicked row.
  * @param isChecked The new checked state.
- * @param rowElement The HTML row element.
  */
-export function handleRowCheckboxClick(instance: DataTable, rowId: any, isChecked: boolean, rowElement: HTMLTableRowElement): void {
-    if (!instance.selectionEnabled) return;
+export function handleRowCheckboxClick(instance: DataTable, rowId: any, isChecked: boolean): void {
+    const state = instance.stateManager;
+    if (!state.getSelectionEnabled()) return;
 
-    if (isChecked) {
-        if (instance.selectionMode === 'single') {
-            // Clear previous selection and update UI
-            instance.selectedRowIds.forEach(id => {
-                const prevRow = instance.element.querySelector(`tr[data-row-id="${id}"]`); // Assumes data-row-id attribute exists
-                if (prevRow) {
-                    prevRow.classList.remove('dt-row-selected', 'bg-indigo-50');
-                    prevRow.setAttribute('aria-selected', 'false');
-                    const prevCheckbox = prevRow.querySelector('input[type="checkbox"]') as HTMLInputElement | null;
-                    if (prevCheckbox) prevCheckbox.checked = false;
-                }
-            });
-            instance.selectedRowIds.clear();
+    // 1. Update state
+    if (state.getSelectionMode() === 'single') {
+        if (isChecked) {
+            state.setSelectedRowIds(new Set([rowId]));
+        } else {
+            // If unchecking the currently selected single item
+            if (state.getSelectedRowIds().has(rowId)) {
+                state.setSelectedRowIds(new Set());
+            }
         }
-        instance.selectedRowIds.add(rowId);
-        rowElement.classList.add('dt-row-selected', 'bg-indigo-50');
-        rowElement.setAttribute('aria-selected', 'true');
     } else {
-        instance.selectedRowIds.delete(rowId);
-        rowElement.classList.remove('dt-row-selected', 'bg-indigo-50');
-        rowElement.setAttribute('aria-selected', 'false');
+        // Multiple mode: just toggle the state for this row
+        state.toggleRowSelection(rowId);
     }
 
-    if (instance.selectionMode === 'multiple') {
-        updateSelectAllCheckboxState(instance); 
-    }
+    // 2. Update UI by re-rendering
+    instance.render();
+
+    // 3. Dispatch change event (SelectAll state is updated during render if needed)
     dispatchSelectionChangeEvent(instance);
 }
 
 /**
  * Updates the state (checked/indeterminate) of the "Select All" checkbox.
+ * This is called during the render cycle (specifically by renderHeader).
  * @param instance The DataTable instance.
  */
 export function updateSelectAllCheckboxState(instance: DataTable): void {
-    if (!instance.selectAllCheckbox || instance.selectionMode !== 'multiple') return;
+    const state = instance.stateManager;
+    if (!instance.selectAllCheckbox || !state.getSelectionEnabled() || state.getSelectionMode() !== 'multiple') return;
 
-    const allRelevantData = getCurrentFilteredSortedData(instance);
+    // Cast l'instance et les données pour l'appel interne si nécessaire
+    const relevantData = state.getIsServerSide()
+        ? getCurrentPageData(instance as DataTable, state.getDisplayedData() as any[][]) // Cast temporaire
+        : getCurrentFilteredSortedData(instance);
 
-    if (allRelevantData.length === 0) {
+    if (relevantData.length === 0) {
         instance.selectAllCheckbox.checked = false;
         instance.selectAllCheckbox.indeterminate = false;
         return;
@@ -104,27 +86,21 @@ export function updateSelectAllCheckboxState(instance: DataTable): void {
 
     let allSelected = true;
     let someSelected = false;
+    const currentSelectedIds = state.getSelectedRowIds();
 
-    for (const rowData of allRelevantData) { 
-        const rowId = rowData[0]; 
-        if (instance.selectedRowIds.has(rowId)) {
+    for (const rowData of relevantData) {
+        const rowId = rowData[0];
+        if (currentSelectedIds.has(rowId)) {
             someSelected = true;
         } else {
             allSelected = false;
         }
-        if (someSelected && !allSelected) break; // Early exit
+        if (someSelected && !allSelected) break; // Optimization
     }
 
-    if (allSelected) {
-        instance.selectAllCheckbox.checked = true;
-        instance.selectAllCheckbox.indeterminate = false;
-    } else if (someSelected) {
-        instance.selectAllCheckbox.checked = false;
-        instance.selectAllCheckbox.indeterminate = true;
-    } else {
-        instance.selectAllCheckbox.checked = false;
-        instance.selectAllCheckbox.indeterminate = false;
-    }
+    // Set checkbox state based on selection status
+    instance.selectAllCheckbox.checked = allSelected;
+    instance.selectAllCheckbox.indeterminate = !allSelected && someSelected;
 }
 
 /**
@@ -132,55 +108,41 @@ export function updateSelectAllCheckboxState(instance: DataTable): void {
  * Used for select-all logic and potentially external API access.
  */
 export function getCurrentFilteredSortedData(instance: DataTable): any[][] {
-    if (instance.isServerSide) {
-        console.warn('getCurrentFilteredSortedData is client-side only and may return incomplete data in server-side mode.');
-        return instance.originalData; // Return current page data in server mode
+    const state = instance.stateManager;
+    if (state.getIsServerSide()) {
+        console.warn('getCurrentFilteredSortedData is client-side oriented and returns only current page data in server-side mode.');
+        return state.getDisplayedData();
     }
-    const filteredData = applyFilters(instance, instance.originalData);
+    const originalData = state.getOriginalData();
+    if (!originalData) return [];
+    const filteredData = applyFilters(instance, originalData);
     const sortedData = sortDataIfEnabled(instance, filteredData);
     return sortedData;
 }
 
 /**
  * Gets the full data objects for the selected rows.
- * Note: In server-side mode, this might only return data for the current page 
- * depending on how `getCurrentFilteredSortedData` is implemented for server-side.
- * @param instance The DataTable instance.
- * @returns An array containing the data of the selected rows.
+ * Note: In server-side mode, this might only return data for the current page.
  */
 export function getSelectedRowData(instance: DataTable): any[][] {
-    const allRelevantData = getCurrentFilteredSortedData(instance); 
-    return allRelevantData.filter(rowData => instance.selectedRowIds.has(rowData[0]));
+    const state = instance.stateManager;
+    const allRelevantData = getCurrentFilteredSortedData(instance);
+    const selectedIds = state.getSelectedRowIds();
+    return allRelevantData.filter(rowData => selectedIds.has(rowData[0]));
 }
 
 /**
  * Gets the IDs of the selected rows.
- * @param instance The DataTable instance.
- * @returns An array of selected row IDs.
+ * This relies on the public API which uses the state manager.
  */
 export function getSelectedRowIds(instance: DataTable): any[] {
-    return Array.from(instance.selectedRowIds);
+     return instance.getSelectedRowIds();
 }
 
 /**
  * Sets the selected rows programmatically.
- * @param instance The DataTable instance.
- * @param ids An array of row IDs to select.
+ * Relies on the public API which handles state update, render, and event dispatching.
  */
 export function setSelectedRowIds(instance: DataTable, ids: any[]): void {
-    if (!instance.selectionEnabled) return;
-    
-    const newSelectedIds = new Set(ids);
-    
-    if (instance.selectionMode === 'single' && newSelectedIds.size > 1) {
-        const lastId = Array.from(newSelectedIds).pop();
-        newSelectedIds.clear();
-        if (lastId !== undefined) {
-            newSelectedIds.add(lastId);
-        }
-    }
-    
-    instance.selectedRowIds = newSelectedIds;
-    instance.render(); // Re-render to update UI
-    dispatchSelectionChangeEvent(instance);
+    instance.setSelectedRowIds(ids);
 } 

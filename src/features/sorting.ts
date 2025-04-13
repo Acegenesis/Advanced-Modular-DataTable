@@ -1,6 +1,6 @@
 import { DataTable } from "../core/DataTable";
 import { SortDirection } from "../core/types";
-import { dispatchEvent } from "../events/dispatcher";
+import { dispatchEvent, dispatchSortChangeEvent } from "../events/dispatcher";
 
 // --- Sorting Feature ---
 
@@ -11,12 +11,13 @@ import { dispatchEvent } from "../events/dispatcher";
  * @returns The sorted data array.
  */
 export function sortDataIfEnabled(instance: DataTable, dataToSort: any[][]): any[][] {
-    if (!instance.options.sorting?.enabled || instance.sortColumnIndex === null || instance.sortDirection === 'none') {
+    const state = instance.stateManager;
+    if (!instance.options.sorting?.enabled || state.getSortColumnIndex() === null || state.getSortDirection() === 'none') {
         return dataToSort;
     }
-    const sortedData = [...dataToSort]; // Sort copy
-    const columnIndex = instance.sortColumnIndex;
-    const direction = instance.sortDirection;
+    const sortedData = [...dataToSort];
+    const columnIndex = state.getSortColumnIndex()!;
+    const direction = state.getSortDirection();
 
     sortedData.sort((a, b) => {
         const valA = a[columnIndex];
@@ -48,34 +49,25 @@ export function sortDataIfEnabled(instance: DataTable, dataToSort: any[][]): any
  * @param columnIndex The index of the clicked column.
  */
 export function handleSortClick(instance: DataTable, columnIndex: number): void {
+    const state = instance.stateManager;
     const columnDef = instance.options.columns[columnIndex];
     if (!instance.options.sorting?.enabled || !columnDef || columnDef.sortable === false) {
-         return; 
+         return;
     }
-    
+
     let newDirection: SortDirection;
-    if (instance.sortColumnIndex === columnIndex) {
-        // Cycle through asc -> desc -> none (optional)
-        // Current implementation: asc -> desc -> asc
-        newDirection = instance.sortDirection === 'asc' ? 'desc' : 'asc';
-        // Optional: Add 'none' state
-        // if (instance.sortDirection === 'asc') newDirection = 'desc';
-        // else if (instance.sortDirection === 'desc') newDirection = 'none';
-        // else newDirection = 'asc';
+    if (state.getSortColumnIndex() === columnIndex) {
+        newDirection = state.getSortDirection() === 'asc' ? 'desc' : 'asc';
     } else {
         newDirection = 'asc';
     }
-    
-    instance.sortColumnIndex = columnIndex;
-    instance.sortDirection = newDirection;
-    instance.currentPage = 1; // Reset to page 1 on sort
 
-    dispatchEvent(instance, 'dt:sortChange', { 
-        sortColumnIndex: instance.sortColumnIndex, 
-        sortDirection: instance.sortDirection 
-    });
+    state.setSort(columnIndex, newDirection);
+    state.setCurrentPage(1);
 
-    if (!instance.isServerSide) {
-         instance.render(); 
+    dispatchSortChangeEvent(instance);
+
+    if (!state.getIsServerSide()) {
+         instance.render();
     }
 } 

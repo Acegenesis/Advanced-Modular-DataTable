@@ -1,43 +1,18 @@
-import { ColumnDefinition, DataTableOptions, RowAction, SortDirection, ColumnFilterState, TextFilterOperator } from './types';
-import { dispatchEvent, dispatchPageChangeEvent, dispatchSelectionChangeEvent } from '../events/dispatcher';
-import { setData, addRow, deleteRowById, updateRowById } from '../data/dataManager';
-import { sortDataIfEnabled, handleSortClick } from '../features/sorting';
-import { getCurrentPageData, renderPaginationControls } from '../features/pagination';
-import { 
-    handleSelectAllClick,
-    handleRowCheckboxClick,
-    updateSelectAllCheckboxState,
-    getCurrentFilteredSortedData,
-    getSelectedRowData,
-    getSelectedRowIds,
-    setSelectedRowIds
-} from '../features/selection';
-import { appendRenderedContent, renderCellByType } from '../rendering/cellRenderer';
-import { renderActionButtons } from '../rendering/uiComponents';
-import { renderHeader } from '../rendering/headerRenderer';
-import { renderStandardBody } from '../rendering/bodyRenderer';
+import { DataTableOptions, ColumnFilterState, ServerSideParams, SortDirection } from './types';
+import { StateManager } from './StateManager';
+import { dispatchEvent, dispatchSelectionChangeEvent, dispatchPageChangeEvent } from '../events/dispatcher';
+import { setData, addRow, deleteRowById, updateRowById, clearDataInternal, getRowByIdInternal } from '../data/dataManager';
+import { getSelectedRowData, setSelectedRowIds, updateSelectAllCheckboxState } from '../features/selection';
 import { render } from '../rendering/mainRenderer';
 
 export class DataTable {
     public element: HTMLElement;
     public options: DataTableOptions;
-    public currentPage: number = 1;
-    public rowsPerPage: number = 10; 
-    public totalRows: number = 0;
-    public sortColumnIndex: number | null = null;
-    public sortDirection: SortDirection = 'none';
-    public originalData: any[][]; // Holds original data in client mode, or current page data in server mode
-    public filterTerm: string = '';
-    public debounceTimer: number | null = null;
-    public isServerSide: boolean = false;
-    public selectionEnabled: boolean = false;
-    public selectionMode: 'single' | 'multiple' = 'multiple';
-    public selectedRowIds: Set<any> = new Set();
+    public stateManager: StateManager;
     public selectAllCheckbox: HTMLInputElement | null = null;
-    private isLoading: boolean = false;
     private loadingOverlayElement: HTMLElement | null = null;
-    public columnFilters: Map<number, ColumnFilterState> = new Map();
     public focusedElementId: string | null = null;
+    public debounceTimer: number | null = null;
 
     constructor(elementId: string, options: DataTableOptions) {
         const targetElement = document.getElementById(elementId);
@@ -66,51 +41,18 @@ export class DataTable {
             this.options.rowActions = options.rowActions.map(action => ({ ...action }));
         }
         
-        // --- Mode Setup --- 
-        this.isServerSide = options.processingMode === 'server';
-        
-        // --- Data Setup --- 
-        this.originalData = options.data ? JSON.parse(JSON.stringify(options.data)) : [];
-        if (this.isServerSide) {
-            this.totalRows = options.serverSideTotalRows ?? 0;
-        } else {
-        this.totalRows = this.originalData.length;
-        }
-
-        // --- Pagination Setup --- 
-        if (this.options.pagination?.enabled) {
-            this.rowsPerPage = this.options.pagination.rowsPerPage ?? 10;
-        }
-        this.currentPage = 1;
-
-        // --- Initial State --- 
-        this.sortColumnIndex = null;
-        this.sortDirection = 'none';
-        this.filterTerm = '';
+        // --- StateManager Setup ---
+        this.stateManager = new StateManager(this.options, options.data);
+        // --- Initialisation DOM & Rendu ---
         this.debounceTimer = null;
+        this.focusedElementId = null;
+        render(this); // Appel initial du rendu principal
+        this.createLoadingOverlay(); // Créer l'overlay de chargement
 
-        // --- Initialisation Filtres Colonne ---
-        if (options.columnFiltering?.enabled) {
-            this.columnFilters = new Map();
-            // Pré-initialiser avec null pour chaque colonne potentiellement filtrable?
-            // Ou laisser vide et remplir au fur et à mesure?
-        }
-
-        // --- Initialisation Sélection --- 
-        if (options.selection?.enabled) {
-            this.selectionEnabled = true;
-            this.selectionMode = options.selection.mode ?? 'multiple';
-            if (options.selection.initialSelectedIds) {
-                this.selectedRowIds = new Set(options.selection.initialSelectedIds);
-            }
-            console.log(`DataTable: Sélection ${this.selectionMode} activée.`);
-        }
-        // ------------------------------
-
-        // Initial Render
-        render(this);
-        this.createLoadingOverlay();
-        dispatchSelectionChangeEvent(this);
+        // --- Événements initiaux ---
+        // Dispatch l'état initial de la sélection
+        dispatchEvent(this, 'selectionChange', { selectedIds: this.stateManager.getSelectedRowIds(), selectedData: this.getSelectedRowData() });
+        console.log("DataTable initialized."); // Garder un log simple d'initialisation
     }
 
     // --- Public API Method: Destroy --- 
@@ -123,95 +65,12 @@ export class DataTable {
 
     // --- Core Rendering Logic --- 
     public render(): void {
-        const activeElement = document.activeElement as HTMLElement;
-        let currentFocusId: string | null = null;
-        if (activeElement && this.element.contains(activeElement)) {
-            currentFocusId = activeElement.id;
-            console.log(`[DataTable.render] Active element BEFORE render: ${currentFocusId || 'None'}`); // Log précis
-            const isFilterElement = currentFocusId?.startsWith('col-filter-');
-            const isGlobalSearch = activeElement.classList.contains('dt-global-search-input');
-
-            if (isFilterElement || isGlobalSearch) {
-                this.focusedElementId = currentFocusId;
-                console.log(`[DataTable.render] Memorizing focus ID: ${this.focusedElementId}`);
-            } else {
-                this.focusedElementId = null;
-            }
-        } else {
-             console.log('[DataTable.render] No active element found within table BEFORE render.');
-            this.focusedElementId = null;
-        }
+        this._saveFocus(); // Sauvegarder le focus avant le rendu
 
         // Appeler la fonction de rendu principale
         render(this);
-    }
 
-    // --- Data Handling Methods --- 
-
-    // --- Cell Rendering Helpers --- 
-
-    private appendRenderedContent(cell: HTMLTableCellElement, content: any, isError: boolean = false): void {
-        // Clear previous content
-        while(cell.firstChild) { cell.removeChild(cell.firstChild); }
-        // Append new content
-        if (content instanceof HTMLElement || content instanceof DocumentFragment) {
-             cell.appendChild(content); 
-        } else if (typeof content === 'string') {
-             cell.innerHTML = content;
-        } else {
-            cell.textContent = String(content);
-        }
-        if (isError) {
-            cell.classList.add('text-red-600');
-        }
-    }
-
-    private renderCellByType(cell: HTMLTableCellElement, data: any, columnDef: ColumnDefinition): void {
-        let content: string | HTMLElement = String(data); 
-        const dataString = String(data);
-        const type = columnDef.type; 
-
-        switch (type) {
-            case 'mail':
-                const linkMail = document.createElement('a');
-                linkMail.href = `mailto:${dataString}`;
-                linkMail.textContent = dataString;
-                linkMail.className = 'text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300';
-                content = linkMail;
-                break;
-            case 'tel':
-                 const linkTel = document.createElement('a');
-                 linkTel.href = `tel:${dataString.replace(/\s+/g, '')}`;
-                 linkTel.textContent = dataString;
-                 linkTel.className = 'text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300';
-                 content = linkTel;
-                break;
-            case 'money':
-                const amount = parseFloat(dataString);
-                if (!isNaN(amount)) {
-                    try {
-                        const locale = columnDef.locale || 'fr-FR'; 
-                        const currency = columnDef.currency || 'EUR'; 
-                        content = new Intl.NumberFormat(locale, { style: 'currency', currency: currency }).format(amount);
-                    } catch (e) {
-                         console.error("Erreur formatage monétaire:", e);
-                         content = dataString + " (Err)"; 
-                    }
-                } else {
-                    content = dataString + " (NaN)"; 
-                }
-                break;
-            case 'number':
-                 const num = parseFloat(dataString);
-                 if (!isNaN(num)) {
-                     const locale = columnDef.locale || 'fr-FR'; 
-                     content = new Intl.NumberFormat(locale).format(num);
-                 } else {
-                     content = dataString + " (NaN)";
-                 }
-                 break;
-        }
-        this.appendRenderedContent(cell, content);
+        this._restoreFocus(); // Restaurer le focus après le rendu
     }
 
     // --- Event Helpers --- 
@@ -219,15 +78,31 @@ export class DataTable {
     // --- Public API Methods --- 
     public setData(newData: any[][]): void {
         setData(this, newData);
+        this.render();
+        dispatchEvent(this, 'dataLoad', { data: newData });
+        dispatchSelectionChangeEvent(this);
     }
     public addRow(rowData: any[]): void {
         addRow(this, rowData);
+        this.render();
+        dispatchEvent(this, 'rowAdd', { rowData: rowData });
     }
     public deleteRowById(id: any, idColumnIndex: number = 0): boolean {
-        return deleteRowById(this, id, idColumnIndex);
+        const deleted = deleteRowById(this, id, idColumnIndex);
+        if (deleted) {
+            this.render();
+            dispatchEvent(this, 'rowDelete', { rowId: id });
+            dispatchSelectionChangeEvent(this);
+        }
+        return deleted;
     }
     public updateRowById(id: any, newRowData: any[], idColumnIndex: number = 0): boolean {
-        return updateRowById(this, id, newRowData, idColumnIndex);
+        const updated = updateRowById(this, id, newRowData, idColumnIndex);
+        if (updated) {
+            this.render();
+            dispatchEvent(this, 'rowUpdate', { rowId: id, rowData: newRowData });
+        }
+        return updated;
     }
 
     // Récupère les données complètes des lignes sélectionnées
@@ -237,12 +112,15 @@ export class DataTable {
 
     // Retourne uniquement les IDs des lignes sélectionnées
     public getSelectedRowIds(): any[] {
-        return getSelectedRowIds(this);
+        return Array.from(this.stateManager.getSelectedRowIds());
     }
 
     // Permet de définir la sélection programmatiquement
     public setSelectedRowIds(ids: any[]): void {
         setSelectedRowIds(this, ids);
+        updateSelectAllCheckboxState(this);
+        dispatchSelectionChangeEvent(this);
+        this.render();
     }
 
     /**
@@ -250,9 +128,12 @@ export class DataTable {
      * @param isLoading - True pour afficher l'indicateur, false pour le masquer.
      */
     public setLoading(isLoading: boolean): void {
-        this.isLoading = isLoading;
+        this.stateManager.setLoading(isLoading);
         if (this.loadingOverlayElement) {
-            this.loadingOverlayElement.style.display = this.isLoading ? 'flex' : 'none';
+            this.loadingOverlayElement.style.display = isLoading ? 'flex' : 'none';
+            dispatchEvent(this, 'loadingStateChange', { isLoading });
+        } else if (isLoading) {
+             console.warn("DataTable: Impossible d'afficher l'overlay de chargement car il n'a pas été créé.");
         }
     }
 
@@ -262,83 +143,190 @@ export class DataTable {
      * @param filterState Nouvel état du filtre (objet { value, operator } ou null)
      */
     public setColumnFilter(columnIndex: number, filterState: ColumnFilterState): void {
-        console.log(`[DataTable.setColumnFilter] Received for index ${columnIndex}:`, filterState);
-        if (!this.options.columnFiltering?.enabled) return;
+        console.log(`[DataTable] Setting filter for column ${columnIndex}:`, filterState);
+        this.stateManager.setColumnFilter(columnIndex, filterState);
 
-        const currentFilter = this.columnFilters.get(columnIndex);
-
-        // Déterminer si l'intention est de supprimer le filtre
-        const isValueEffectivelyEmpty = !filterState || filterState.value === null || filterState.value === '';
-        const isOperatorValueIndependent = filterState?.operator === 'isEmpty' || filterState?.operator === 'isNotEmpty';
-        const shouldDelete = !filterState || (isValueEffectivelyEmpty && !isOperatorValueIndependent);
-
-        if (shouldDelete) {
-            // Supprimer si l'état est null ou si la valeur est vide ET que l'opérateur en a besoin
-            if (this.columnFilters.has(columnIndex)) {
-                console.log(`[DataTable.setColumnFilter] Deleting filter for index ${columnIndex}.`);
-                this.columnFilters.delete(columnIndex);
-            } else {
-                console.log(`[DataTable.setColumnFilter] No filter to delete for index ${columnIndex}. No change.`);
-                return; // Pas de changement si déjà vide
-            }
-        } else if (filterState) {
-            // Mettre à jour ou ajouter le filtre (y compris pour isEmpty/isNotEmpty)
-            const newOperator = filterState.operator || 'contains';
-            const newValue = filterState.value; // Peut être null/vide pour isEmpty/isNotEmpty
-
-            const newFilterState: ColumnFilterState = {
-                value: newValue,
-                operator: newOperator
-            };
-
-            console.log(`[DataTable.setColumnFilter] Setting filter for index ${columnIndex}:`, newFilterState);
-            this.columnFilters.set(columnIndex, newFilterState);
-        }
-
-        // --- Trigger update (si un changement a eu lieu OU si on a supprimé un filtre) ---
-        this.currentPage = 1;
-
-        const finalFilterState = this.columnFilters.get(columnIndex); // Lire l'état après modification
-        const allFiltersState: { [key: number]: ColumnFilterState } = {};
-        this.columnFilters.forEach((value, key) => {
-            allFiltersState[key] = value;
-        });
-        // Dispatch avec l'état *final*
-        dispatchEvent(this, 'dt:filterChange', {
-            columnIndex,
-            value: finalFilterState?.value ?? null,
-            operator: finalFilterState?.operator,
-            allFilters: allFiltersState
-         });
-
-        if (!this.isServerSide) {
+        if (this.stateManager.getIsServerSide() && this.options.serverSide?.fetchData) {
+             this.fetchData();
+        } else {
             this.render();
         }
+         dispatchEvent(this, 'filterChange', { type: 'column', columnIndex, filterState });
     }
 
     /**
      * Efface tous les filtres actifs (colonnes et recherche globale) et redessine.
      */
     public clearAllFilters(): void {
-        let filtersCleared = false;
-        if (this.filterTerm) {
-            this.filterTerm = '';
-            filtersCleared = true;
-            // Mettre à jour l'input de recherche globale si possible
+        let changed = false;
+        if (this.stateManager.getFilterTerm()) {
+            this.stateManager.setFilterTerm('');
+            changed = true;
             const searchInput = this.element.querySelector('.dt-global-search-input') as HTMLInputElement | null;
             if (searchInput) searchInput.value = '';
         }
-        if (this.columnFilters.size > 0) {
-            this.columnFilters.clear();
-            filtersCleared = true;
+        if (this.stateManager.getColumnFilters().size > 0) {
+            this.stateManager.clearAllColumnFilters();
+            changed = true;
+            this.element.querySelectorAll('.dt-column-filter-input').forEach(input => {
+                (input as HTMLInputElement).value = '';
+            });
         }
 
-        if (filtersCleared) {
-            this.currentPage = 1; // Revenir à la page 1
-            console.log('Tous les filtres ont été effacés.');
-            dispatchEvent(this, 'dt:filtersCleared'); // Nouvel événement optionnel
-            this.render();
+        if (changed) {
+            console.log("[DataTable] All filters cleared.");
+            if (this.stateManager.getIsServerSide() && this.options.serverSide?.fetchData) {
+                this.fetchData();
+            } else {
+                this.render();
+            }
+             dispatchEvent(this, 'filterChange', { type: 'clearAll' });
         }
+    }
+
+    /**
+     * Récupère les données du serveur (utilisé en mode server-side).
+     */
+    public async fetchData(): Promise<void> {
+        if (!this.stateManager.getIsServerSide() || !this.options.serverSide?.fetchData) {
+            console.warn("DataTable: fetchData appelé mais non configuré pour le mode server-side.");
+            return;
+        }
+
+        this.setLoading(true);
+
+        try {
+            const params = {
+                draw: Date.now(),
+                start: (this.stateManager.getCurrentPage() - 1) * this.stateManager.getRowsPerPage(),
+                length: this.stateManager.getRowsPerPage(),
+                search: {
+                    value: this.stateManager.getFilterTerm(),
+                    regex: false
+                },
+                order: this.stateManager.getSortColumnIndex() !== null
+                    ? [{ column: this.stateManager.getSortColumnIndex(), dir: this.stateManager.getSortDirection() }]
+                    : [],
+                columns: this.options.columns?.map((col, index) => ({
+                    data: col.data,
+                    name: col.name || '',
+                    searchable: col.searchable ?? true,
+                    orderable: col.sortable ?? true,
+                    search: {
+                        value: this.stateManager.getColumnFilters().get(index)?.value ?? '',
+                        regex: false
+                    }
+                })) || []
+            };
+
+            console.log("[DataTable] Fetching data with params:", params);
+
+            const response = await this.options.serverSide.fetchData(params as ServerSideParams);
+
+             console.log("[DataTable] Received server response:", response);
+
+            if (!response || typeof response.recordsTotal !== 'number' || typeof response.recordsFiltered !== 'number' || !Array.isArray(response.data)) {
+                throw new Error("Format de réponse serveur invalide.");
+            }
+
+            this.stateManager.setData(response.data);
+            this.stateManager.setTotalRows(response.recordsFiltered);
+
+        } catch (error) {
+            console.error("DataTable: Erreur lors de la récupération des données serveur:", error);
+            dispatchEvent(this, 'error', { message: "Erreur lors de la récupération des données serveur.", error });
+            this.stateManager.setData([]);
+            this.stateManager.setTotalRows(0);
+        } finally {
+            this.setLoading(false);
+             this.render();
+             dispatchEvent(this, 'dataLoad', { source: 'server', data: this.stateManager.getDisplayedData() });
+        }
+    }
+
+    // --- Data Manipulation API ---
+    public clearData(): void {
+        console.log("[DataTable API] clearData called");
+        clearDataInternal(this);
+        this.render(); // Re-render l'état vide
+        dispatchEvent(this, 'dataClear');
+        dispatchSelectionChangeEvent(this); // La sélection est réinitialisée
+    }
+
+    /**
+     * Récupère les données d'une ligne par son ID.
+     * @param id L'ID de la ligne.
+     * @param idColumnIndex L'index de la colonne ID (défaut 0).
+     * @returns Les données de la ligne ou undefined.
+     */
+    public getRowById(id: any, idColumnIndex: number = 0): any[] | undefined {
+        return getRowByIdInternal(this, id, idColumnIndex);
+    }
+
+    // --- Pagination API ---
+    /**
+     * Navigue vers une page spécifique.
+     * @param pageNumber Le numéro de la page (1-indexé).
+     */
+    public setPage(pageNumber: number): void {
+        const totalPages = Math.max(1, Math.ceil(this.stateManager.getTotalRows() / this.stateManager.getRowsPerPage()));
+        const targetPage = Math.max(1, Math.min(pageNumber, totalPages)); // Clamp page number
+        if (targetPage !== this.stateManager.getCurrentPage()) {
+            console.log(`[DataTable API] setPage called with ${pageNumber} (targeting ${targetPage})`);
+            this.stateManager.setCurrentPage(targetPage);
+            if (this.stateManager.getIsServerSide()) {
+                this.fetchData(); // Server-side: fetch new page
+            } else {
+                this.render(); // Client-side: just re-render
+            }
+            dispatchPageChangeEvent(this); // Dispatch event
+        }
+    }
+
+    // --- Sorting API ---
+    /**
+     * Définit le tri actuel de la table.
+     * @param columnIndex Index de la colonne à trier (ou null pour annuler).
+     * @param direction Direction du tri ('asc', 'desc', ou 'none').
+     */
+    public setSort(columnIndex: number | null, direction: SortDirection): void {
+        if (columnIndex !== this.stateManager.getSortColumnIndex() || direction !== this.stateManager.getSortDirection()) {
+            console.log(`[DataTable API] setSort called: column=${columnIndex}, direction=${direction}`);
+            this.stateManager.setSort(columnIndex, direction);
+             if (this.stateManager.getIsServerSide()) {
+                this.fetchData(); // Server-side: fetch sorted data
+            } else {
+                this.render(); // Client-side: just re-render
+            }
+            // Dispatch event (adapter l'event existant?)
+             dispatchEvent(this, 'sortChange', { // Utiliser un nom d'event cohérent
+                 sortColumnIndex: columnIndex,
+                 sortDirection: direction
+             });
+        }
+    }
+
+    // --- General API ---
+    /** Recharge les données (utile en mode serveur). */
+    public refreshData(): void {
+         console.log("[DataTable API] refreshData called");
+         if (this.stateManager.getIsServerSide()) {
+             this.fetchData();
+         } else {
+             // En mode client, un simple render suffit généralement
+             this.render();
+             // Ou si on veut *vraiment* recharger depuis la source initiale?
+             // this.setData(this.stateManager.getOriginalData()); // Attention, peut perdre état filtre/tri?
+              dispatchEvent(this, 'dataLoad', { source: 'refresh', data: this.stateManager.getDisplayedData() });
+         }
+    }
+
+    /**
+     * Récupère l'état interne actuel de la table (pour débogage ou sauvegarde).
+     * @returns Un objet représentant l'état.
+     */
+    public getState(): object {
+        return this.stateManager.getFullState();
     }
 
     // --- Private Helper Methods ---
@@ -372,6 +360,59 @@ export class DataTable {
 
             this.loadingOverlayElement.appendChild(loadingContent);
             this.element.appendChild(this.loadingOverlayElement);
+        }
+    }
+
+    // Nouvelle méthode privée pour sauvegarder le focus
+    private _saveFocus(): void {
+        const activeElement = document.activeElement as HTMLElement;
+        if (activeElement && this.element.contains(activeElement)) {
+            const currentFocusId = activeElement.id;
+            console.log(`[DataTable._saveFocus] Active element: ${currentFocusId || 'None'}`); // Log précis
+            const isFilterElement = currentFocusId?.startsWith('col-filter-');
+            const isGlobalSearch = activeElement.classList.contains('dt-global-search-input');
+
+            if (isFilterElement || isGlobalSearch) {
+                this.focusedElementId = currentFocusId;
+                console.log(`[DataTable._saveFocus] Memorizing focus ID: ${this.focusedElementId}`);
+            } else {
+                this.focusedElementId = null; // Ne pas mémoriser pour d'autres éléments
+            }
+        } else {
+            console.log('[DataTable._saveFocus] No active element found within table.');
+            this.focusedElementId = null;
+        }
+    }
+
+    // Nouvelle méthode privée pour restaurer le focus
+    private _restoreFocus(): void {
+        if (this.focusedElementId) {
+            const elementToFocus = document.getElementById(this.focusedElementId);
+            if (elementToFocus) {
+                console.log(`[DataTable._restoreFocus] Restoring focus to: ${this.focusedElementId}`);
+                // Tenter de restaurer la position du curseur pour les inputs
+                if (elementToFocus instanceof HTMLInputElement) {
+                    const originalValue = elementToFocus.value; // Sauvegarder la valeur actuelle
+                    elementToFocus.focus();
+                    // Restaurer la valeur peut réinitialiser la position du curseur,
+                    // essayer de mettre le curseur à la fin
+                    try {
+                         elementToFocus.value = ''; // Effacer temporairement
+                         elementToFocus.value = originalValue; // Remettre la valeur
+                         elementToFocus.selectionStart = elementToFocus.selectionEnd = originalValue.length;
+                    } catch (e) {
+                        console.warn(`[DataTable._restoreFocus] Could not fully restore cursor position for ${this.focusedElementId}:`, e);
+                    }
+
+                } else {
+                    elementToFocus.focus();
+                }
+            } else {
+                 console.log(`[DataTable._restoreFocus] Element with ID ${this.focusedElementId} not found after render.`);
+            }
+             this.focusedElementId = null; // Réinitialiser après la tentative de focus
+        } else {
+            // console.log('[DataTable._restoreFocus] No focus ID was memorized.'); // Optionnel: peut être bruyant
         }
     }
 } 

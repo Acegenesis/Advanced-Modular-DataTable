@@ -1,65 +1,44 @@
 import { DataTable } from "../core/DataTable";
 import { SortDirection, TextFilterOperator, ColumnFilterState } from "../core/types";
 
-// --- Event Detail Interfaces ---
-interface PageChangeDetail {
-    currentPage: number;
-    rowsPerPage: number;
-    totalRows: number;
-}
+// Supprimer les interfaces de détail spécifiques, nous utiliserons des objets anonymes
+// export interface PageChangeDetail { ... }
+// export interface SelectionChangeDetail { ... }
+// ... etc ...
 
-interface SelectionChangeDetail {
-    selectedIds: any[];
-    selectedData: any[][];
-}
-
-interface SortChangeDetail {
-    columnIndex: number | null;
-    sortDirection: SortDirection;
-}
-
-interface SearchDetail {
-    searchTerm: string;
-}
-
-interface FilterChangeDetail {
-    columnIndex: number;
-    value: any | null;
-    operator?: TextFilterOperator;
-    allFilters: { [key: number]: ColumnFilterState };
-}
-
-interface ActionClickDetail {
-    actionId: string;
-    rowData: any[];
-    rowIndex: number; // Index dans les données actuellement affichées
-}
+/** Type générique pour les détails des événements personnalisés */
+// Renommer pour éviter confusion si on utilise des types spécifiques plus tard?
+// export type CustomEventDetailPayload = { [key: string]: any };
 
 // --- Generic Dispatcher ---
 
 /**
  * Helper générique pour dispatcher les CustomEvents depuis l'élément DataTable.
+ * @param instance L'instance DataTable.
+ * @param eventName Nom de l'événement préfixé (ex: dt:pageChange).
+ * @param detail Données associées à l'événement.
  */
-export function dispatchEvent<T>(instance: DataTable, eventName: string, detail?: T): void {
-    console.log(`Dispatching event: ${eventName}`, detail);
-    const event = new CustomEvent<T>(eventName, {
+export function dispatchEvent<DetailType = any>(instance: DataTable, eventName: string, detail?: DetailType): void {
+    const prefixedEventName = eventName.startsWith('dt:') ? eventName : `dt:${eventName}`;
+    console.log(`Dispatching event: ${prefixedEventName}`, detail);
+    // Utiliser CustomEvent<DetailType> si on veut typer l'accès à e.detail dans les écouteurs
+    const event = new CustomEvent<DetailType>(prefixedEventName, {
         detail: detail,
-        bubbles: true, // Permet à l'événement de remonter le DOM
-        cancelable: true // Peut être annulé
+        bubbles: true,
+        cancelable: true
     });
     instance.element.dispatchEvent(event);
 }
 
-// --- Specific Event Dispatchers ---
+// --- Specific Event Dispatchers --- (Ne plus être génériques)
 
 /**
  * Dispatch l'événement de changement de page.
  */
 export function dispatchPageChangeEvent(instance: DataTable): void {
-     dispatchEvent<PageChangeDetail>(instance, 'dt:pageChange', {
-        currentPage: instance.currentPage,
-        rowsPerPage: instance.rowsPerPage,
-        totalRows: instance.totalRows
+    dispatchEvent(instance, 'pageChange', {
+        currentPage: instance.stateManager.getCurrentPage(),
+        rowsPerPage: instance.stateManager.getRowsPerPage()
     });
 }
 
@@ -67,50 +46,81 @@ export function dispatchPageChangeEvent(instance: DataTable): void {
  * Dispatch l'événement de changement de sélection.
  */
 export function dispatchSelectionChangeEvent(instance: DataTable): void {
-    dispatchEvent<SelectionChangeDetail>(instance, 'dt:selectionChange', {
-        selectedIds: instance.getSelectedRowIds(),
-        selectedData: instance.getSelectedRowData()
-    });
+    const selectedIds = Array.from(instance.stateManager.getSelectedRowIds());
+    dispatchEvent(instance, 'selectionChange', { selectedIds });
 }
 
 /**
  * Dispatch l'événement de changement de tri.
  */
 export function dispatchSortChangeEvent(instance: DataTable): void {
-    dispatchEvent<SortChangeDetail>(instance, 'dt:sortChange', {
-        columnIndex: instance.sortColumnIndex,
-        sortDirection: instance.sortDirection
+     dispatchEvent(instance, 'sortChange', {
+         sortColumnIndex: instance.stateManager.getSortColumnIndex(),
+         sortDirection: instance.stateManager.getSortDirection()
+     });
+}
+
+/**
+ * Dispatch l'événement de recherche (terme global).
+ */
+export function dispatchSearchEvent(instance: DataTable): void {
+    dispatchEvent(instance, 'search', {
+        searchTerm: instance.stateManager.getFilterTerm()
     });
 }
 
 /**
- * Dispatch l'événement de recherche globale.
- * (Fonction appelée depuis filtering.ts)
+ * Dispatch l'événement de changement de filtre (colonne ou clearAll).
  */
-export function dispatchSearchEvent(instance: DataTable, searchTerm: string): void {
-     dispatchEvent<SearchDetail>(instance, 'dt:search', { searchTerm });
+export function dispatchFilterChangeEvent(instance: DataTable, detail: { type: 'column' | 'clearAll', columnIndex?: number, filterState?: ColumnFilterState }): void {
+    dispatchEvent(instance, 'filterChange', detail);
 }
 
 /**
- * Dispatch l'événement de changement de filtre de colonne.
- * (Fonction appelée depuis DataTable.ts)
+ * Dispatch l'événement de clic sur un bouton d'action de ligne.
  */
-export function dispatchFilterChangeEvent(instance: DataTable, detail: FilterChangeDetail): void {
-    dispatchEvent<FilterChangeDetail>(instance, 'dt:filterChange', detail);
+export function dispatchActionClickEvent(instance: DataTable, detail: { actionId: string, rowId: any, rowData: any[], rowIndex: number }): void {
+    dispatchEvent(instance, 'actionClick', detail);
 }
 
 /**
- * Dispatch l'événement de clic sur une action de ligne.
- * (Fonction à appeler depuis bodyRenderer.ts lors de la création du bouton d'action)
+ * Dispatch l'événement de chargement de données.
  */
-export function dispatchActionClickEvent(instance: DataTable, detail: ActionClickDetail): void {
-    dispatchEvent<ActionClickDetail>(instance, 'dt:actionClick', detail);
+export function dispatchDataLoadEvent(instance: DataTable, detail: { source: string, data?: any[][] }): void {
+    dispatchEvent(instance, 'dataLoad', detail);
 }
 
-/**
- * Dispatch l'événement indiquant que le rendu est terminé.
- * (Fonction appelée depuis mainRenderer.ts)
- */
+/** Dispatch l'événement d'effacement des données. */
+export function dispatchDataClearEvent(instance: DataTable): void {
+    dispatchEvent(instance, 'dataClear');
+}
+
+/** Dispatch l'événement de rendu terminé. */
 export function dispatchRenderCompleteEvent(instance: DataTable): void {
-    dispatchEvent<undefined>(instance, 'dt:renderComplete');
+    dispatchEvent(instance, 'renderComplete');
+}
+
+/** Dispatch l'événement de changement d'état de chargement. */
+export function dispatchLoadingStateChangeEvent(instance: DataTable, detail: { isLoading: boolean }): void {
+    dispatchEvent(instance, 'loadingStateChange', detail);
+}
+
+/** Dispatch l'événement d'erreur. */
+export function dispatchErrorEvent(instance: DataTable, detail: { message: string, error?: any }): void {
+    dispatchEvent(instance, 'error', detail);
+}
+
+/** Dispatch l'événement d'ajout de ligne. */
+export function dispatchRowAddEvent(instance: DataTable, detail: { rowData: any[] }): void {
+    dispatchEvent(instance, 'rowAdd', detail);
+}
+
+/** Dispatch l'événement de suppression de ligne. */
+export function dispatchRowDeleteEvent(instance: DataTable, detail: { rowId: any }): void {
+    dispatchEvent(instance, 'rowDelete', detail);
+}
+
+/** Dispatch l'événement de mise à jour de ligne. */
+export function dispatchRowUpdateEvent(instance: DataTable, detail: { rowId: any, rowData: any[] }): void {
+    dispatchEvent(instance, 'rowUpdate', detail);
 } 

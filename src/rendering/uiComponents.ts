@@ -1,6 +1,7 @@
 import { DataTable } from "../core/DataTable";
 import { dispatchEvent } from "../events/dispatcher";
 import { RowAction } from "../core/types";
+import { dispatchActionClickEvent } from "../events/dispatcher";
 
 // --- UI Component Rendering ---
 
