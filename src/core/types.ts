@@ -11,7 +11,7 @@ export interface ColumnDefinition {
     data?: string;
     name?: string;
     type?: 'string' | 'number' | 'date' | 'mail' | 'tel' | 'money';
-    render?: (cellData: any, rowData: any[]) => string | HTMLElement | DocumentFragment;
+    render?: (cellData: any, rowData: any[], rowIndex: number) => string | HTMLElement | DocumentFragment;
     sortable?: boolean;
     searchable?: boolean;
     locale?: string;
@@ -22,6 +22,7 @@ export interface ColumnDefinition {
     filterOptions?: (string | { value: any; label: string })[];
     filterPlaceholder?: string;
     filterOperators?: TextFilterOperator[] | NumberFilterOperator[] | DateFilterOperator[] | MultiSelectFilterOperator[];
+    textAlign?: 'left' | 'center' | 'right' | 'justify';
 }
 
 // Interface pour les actions
@@ -35,14 +36,8 @@ export interface RowAction {
 export interface DataTableOptions {
     columns: ColumnDefinition[];
     data?: any[][]; // Revenir à any[][]
-    pagination?: {
-        enabled: boolean;
-        rowsPerPage?: number; 
-        style?: PaginationStyle;
-        previousButtonContent?: string;
-        nextButtonContent?: string;
-        jumpButtonText?: string;
-    };
+    uniqueRowIdColumn?: number | string; // Index (nombre) ou nom de la colonne (chaîne) contenant l'ID
+    pagination?: PaginationOptions;
     sorting?: {
         enabled: boolean;
     };
@@ -51,6 +46,10 @@ export interface DataTableOptions {
         debounceTime?: number; 
     };
     rowActions?: RowAction[];
+    actionsColumn?: { // Conserver pour rétrocompatibilité? ou supprimer si refactorisé partout
+         header?: string;
+         width?: string;
+    };
     processingMode?: 'client' | 'server';
     serverSideTotalRows?: number;
     serverSide?: {
@@ -76,6 +75,8 @@ export interface DataTableOptions {
         persist?: boolean; // Activer/désactiver la persistance
         prefix?: string; // Préfixe optionnel pour la clé localStorage
     };
+    // Ajout option globale pour redimensionnement
+    resizableColumns?: boolean;
 }
 
 // Options spécifiques à l'export CSV
@@ -158,4 +159,14 @@ export interface ServerSideResponse {
     recordsFiltered: number;
     data: any[][]; // Revenir à any[][]
     error?: string;
+}
+
+export interface PaginationOptions {
+    enabled?: boolean;
+    rowsPerPage?: number;
+    rowsPerPageOptions?: number[];
+    style?: PaginationStyle;
+    previousButtonContent?: string;
+    nextButtonContent?: string;
+    jumpButtonText?: string;
 } 

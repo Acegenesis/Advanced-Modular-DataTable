@@ -2,141 +2,91 @@ import { DataTable } from "../core/DataTable";
 import { getCurrentPageData } from "../features/pagination";
 import { handleRowCheckboxClick } from "../features/selection";
 import { appendRenderedContent, renderCellByType } from "./cellRenderer";
-import { renderActionButtons } from "./uiComponents";
+import { renderActionButtons } from './uiComponents';
 
 // --- Body Rendering Logic ---
 
 /**
- * Renders the table body (TBODY).
+ * Renders the table body (TBODY) for standard mode.
  * @param instance The DataTable instance.
  * @param table The TABLE element.
- * @param data The data to display in the body (already filtered/sorted if client-side).
+ * @param data The data to render in the body.
  */
 export function renderStandardBody(instance: DataTable, table: HTMLTableElement, data: any[][]): void {
-    // --- LOGS SUPPRIMÉS ---
-    // console.log("[renderStandardBody] Received data (count):", data.length);
-    // if(data.length > 0) console.log("[renderStandardBody] First row of received data:", data[0]);
-    // ----------------------
-    let tbody = table.querySelector('tbody');
-    if (tbody) {
-        tbody.remove(); // Remove old tbody if exists
-    }
-    tbody = table.createTBody();
-    tbody.className = 'bg-white divide-y divide-gray-200';
-    tbody.id = instance.element.id + '-tbody';
-
-    // Appliquer la pagination côté client si nécessaire
-    const dataToRender = getCurrentPageData(instance, data);
-    // --- LOGS SUPPRIMÉS ---
-    // console.log("[renderStandardBody] Data after pagination (count):", dataToRender.length);
-    // if(dataToRender.length > 0) console.log("[renderStandardBody] First row after pagination:", dataToRender[0]);
-    // ----------------------
-
-    // Handle empty state
-    if (dataToRender.length === 0) {
-        // --- LOG SUPPRIMÉ ---
-        // console.log("[renderStandardBody] Rendering empty state.");
-        // ------------------
-        renderEmptyState(instance, tbody);
-        return;
-    }
-
-    // Render rows
-    // --- LOG SUPPRIMÉ ---
-    // console.log(`[renderStandardBody] Rendering ${dataToRender.length} rows.`);
-    // --------------------
-    dataToRender.forEach(rowData => {
-        renderRow(instance, tbody!, rowData);
-    });
-}
-
-/**
- * Renders a single table row (TR) with its cells (TD).
- * @param instance The DataTable instance.
- * @param tbody The TBODY element.
- * @param rowData The data for the row.
- */
-function renderRow(instance: DataTable, tbody: HTMLTableSectionElement, rowData: any[]): void {
-    const state = instance.stateManager; // Référence au stateManager
-    const row = tbody.insertRow();
-    const rowId = rowData[0]; // Assume ID is in the first column
-    // Utiliser stateManager pour vérifier la sélection
-    const isSelected = state.getSelectedRowIds().has(rowId);
-
-    // Apply base class + selected class if applicable
-    row.className = `hover:bg-gray-50 transition-colors duration-150 ${isSelected ? 'dt-row-selected bg-indigo-50' : ''}`;
-    row.dataset.rowId = rowId;
-    row.setAttribute('role', 'row');
-    row.setAttribute('aria-selected', isSelected ? 'true' : 'false');
-
-    // Render selection checkbox cell (if enabled)
-    // Utiliser stateManager pour vérifier si la sélection est activée
-    if (state.getSelectionEnabled()) {
-        renderSelectionCell(instance, row, rowId, isSelected);
-    }
-
-    // Render data cells
-    rowData.forEach((cellData, cellIndex) => {
-        renderDataCell(instance, row, cellData, cellIndex, rowData);
-    });
-
-    // Render action buttons cell (if enabled)
-    renderActionButtons(instance, row, rowData);
-}
-
-/**
- * Renders the cell for the selection checkbox.
- * @param instance The DataTable instance.
- * @param row The TR element.
- * @param rowId The ID of the row.
- * @param isSelected Whether the row is currently selected.
- */
-function renderSelectionCell(instance: DataTable, row: HTMLTableRowElement, rowId: any, isSelected: boolean): void {
-    const tdCheckbox = row.insertCell();
-    tdCheckbox.className = 'px-4 py-4 text-center align-middle';
-    tdCheckbox.setAttribute('role', 'gridcell');
-
-    const rowCheckbox = document.createElement('input');
-    rowCheckbox.type = 'checkbox';
-    rowCheckbox.className = 'form-checkbox h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500';
-    rowCheckbox.checked = isSelected;
-    rowCheckbox.setAttribute('aria-label', `Sélectionner ligne ${rowId}`);
-    rowCheckbox.dataset.rowId = rowId; // Link checkbox to row ID
-
-    rowCheckbox.addEventListener('change', (event) => {
-        const isChecked = (event.target as HTMLInputElement).checked;
-        handleRowCheckboxClick(instance, rowId, isChecked);
-    });
-     tdCheckbox.appendChild(rowCheckbox);
-}
-
-/**
- * Renders a single data cell (TD).
- * @param instance The DataTable instance.
- * @param row The TR element.
- * @param cellData The data for the cell.
- * @param cellIndex The index of the cell.
- * @param rowData The data for the entire row (needed for custom renderers).
- */
-function renderDataCell(instance: DataTable, row: HTMLTableRowElement, cellData: any, cellIndex: number, rowData: any[]): void {
-    const cell = row.insertCell();
-    cell.className = 'px-6 py-4 text-sm text-gray-800 align-middle whitespace-nowrap overflow-hidden text-ellipsis';
-    cell.setAttribute('role', 'gridcell');
-    const columnDef = instance.options.columns[cellIndex]; 
-
-    if (columnDef && typeof columnDef.render === 'function') { 
-        try { 
-            appendRenderedContent(cell, columnDef.render(cellData, rowData)); 
-        }
-        catch (error) { 
-            console.error('Erreur dans la fonction render personnalisée:', error, { cellData, rowData, columnDef }); 
-            appendRenderedContent(cell, '[Erreur Rendu]', true); 
-        }
-    } else if (columnDef && columnDef.type) {
-        renderCellByType(cell, cellData, columnDef);
+    const state = instance.stateManager;
+    let tbody = table.tBodies[0];
+    if (!tbody) {
+        tbody = table.createTBody();
     } else {
-        appendRenderedContent(cell, cellData); 
+        tbody.innerHTML = ''; // Clear previous body content
     }
+
+    const columnOrder = state.getColumnOrder(); // Récupérer l'ordre des colonnes
+    const selectedRowIds = state.getSelectedRowIds();
+    const selectionEnabled = state.getSelectionEnabled();
+    const uniqueRowIdColumn = instance.options.uniqueRowIdColumn || 0;
+
+    data.forEach((row, rowIndex) => {
+        const tr = tbody.insertRow();
+        tr.setAttribute('role', 'row');
+        const rowId = row[uniqueRowIdColumn as number];
+
+        // Appliquer style si la ligne est sélectionnée
+        if (selectionEnabled && selectedRowIds.has(rowId)) {
+            tr.classList.add('bg-blue-100'); // Example selection style
+        }
+
+        // --- Selection Checkbox Cell (if enabled) ---
+        if (selectionEnabled) {
+            const tdCheckbox = tr.insertCell();
+            tdCheckbox.setAttribute('role', 'cell');
+            tdCheckbox.className = 'dt-td dt-td-checkbox px-4 py-2 text-center align-middle sticky left-0 z-5'; // Make sticky, adjust z-index if needed
+            // Appliquer le fond de sélection si la ligne est sélectionnée
+            if (selectedRowIds.has(rowId)) {
+                tdCheckbox.classList.add('bg-blue-100'); 
+            } else {
+                 tdCheckbox.classList.add('bg-white'); // Fond blanc par défaut
+            }
+            tdCheckbox.style.width = '50px'; // Correspond à la largeur de l'en-tête checkbox
+            const checkbox = document.createElement('input');
+            checkbox.type = state.getSelectionMode() === 'single' ? 'radio' : 'checkbox';
+            checkbox.className = 'form-checkbox h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500';
+            checkbox.name = state.getSelectionMode() === 'single' ? `dt-select-${instance.element.id}` : ''; // Nom commun pour radio
+            checkbox.checked = selectedRowIds.has(rowId);
+            checkbox.setAttribute('aria-label', `Select row ${rowIndex + 1}`);
+            checkbox.addEventListener('change', () => {
+                state.toggleRowSelection(rowId);
+                instance.render(); // Re-render to update styles and potentially the header checkbox
+                // Envoyer un événement personnalisé si nécessaire
+                instance.element.dispatchEvent(new CustomEvent('selectionChange', { detail: { selectedIds: Array.from(state.getSelectedRowIds()) } }));
+            });
+            tdCheckbox.appendChild(checkbox);
+        }
+
+        // --- Data Cells (iterate based on columnOrder) ---
+        columnOrder.forEach(originalIndex => {
+            const columnDef = instance.options.columns[originalIndex];
+            const cellData = row[originalIndex]; // Obtenir les données via l'index original
+            const td = tr.insertCell();
+            td.setAttribute('role', 'cell');
+            td.className = 'dt-td px-4 py-2 text-sm text-gray-700 border-b border-gray-200 whitespace-nowrap overflow-hidden text-ellipsis';
+
+            if (columnDef?.render) {
+                // Custom renderer
+                td.innerHTML = columnDef.render(cellData, row, rowIndex) as string;
+            } else {
+                // Default rendering
+                td.textContent = cellData !== null && cellData !== undefined ? String(cellData) : '';
+            }
+            // Appliquer l'alignement du texte si défini dans columnDef
+            if (columnDef?.textAlign) {
+                td.style.textAlign = columnDef.textAlign;
+            }
+        });
+
+        // --- Actions Cell (if defined) ---
+        renderActionButtons(instance, tr, row); 
+    });
 }
 
 /**

@@ -2,7 +2,7 @@ import { DataTable } from "../core/DataTable";
 import { dispatchEvent } from "../events/dispatcher";
 import { renderSearchInput, applyFilters } from "../features/filtering";
 import { sortDataIfEnabled } from "../features/sorting";
-import { renderPaginationControls } from "../features/pagination";
+import { renderPaginationControls, getCurrentPageData } from "../features/pagination";
 import { updateSelectAllCheckboxState } from "../features/selection";
 import { renderHeader } from "./headerRenderer";
 import { renderStandardBody } from "./bodyRenderer";
@@ -186,18 +186,37 @@ export function render(instance: DataTable): void {
     }
 
     // 2. Data Preparation
-    let dataToDisplay: any[][];
-    let currentTotalRows = state.getTotalRows();
+    let dataForPagination: any[][];
+    let currentTotalRows: number;
+    let finalDataToDisplay: any[][];
 
     if (state.getIsServerSide()) {
-        dataToDisplay = state.getDisplayedData();
+        // En mode serveur, les données sont déjà paginées/triées/filtrées par le serveur
+        dataForPagination = state.getDisplayedData(); // Le serveur a renvoyé les données de la page actuelle
+        currentTotalRows = state.getTotalRows(); // Le serveur a renvoyé le total filtré
+        finalDataToDisplay = dataForPagination; // On affiche directement ce qu'on a reçu
+        console.log(`[Render - ServerSide] Using data as received. totalRows=${currentTotalRows}, receivedRows=${finalDataToDisplay.length}`);
     } else {
+        // En mode client, on applique tout:
         const originalClientData = state.getOriginalData();
         const filteredData = applyFilters(instance, originalClientData);
         const sortedData = sortDataIfEnabled(instance, filteredData);
-        state.setDisplayedData(sortedData);
-        dataToDisplay = state.getDisplayedData();
-        currentTotalRows = dataToDisplay.length;
+        
+        // Mettre à jour les données "visibles" après tri/filtre dans l'état
+        // state.setDisplayedData(sortedData); // <- On ne le fait plus ici, car on va paginer ensuite
+        
+        // Nombre total de lignes après filtrage/tri (pour la pagination)
+        currentTotalRows = sortedData.length; 
+        dataForPagination = sortedData; // Utiliser les données triées/filtrées pour la pagination
+        
+        // Log avant pagination
+        const rppBeforePaging = state.getRowsPerPage();
+        const cpBeforePaging = state.getCurrentPage();
+        console.log(`[Render - ClientSide] Before pagination: rowsPerPage=${rppBeforePaging}, currentPage=${cpBeforePaging}, totalFilteredRows=${currentTotalRows}`);
+        
+        // Appliquer la pagination sur les données filtrées/triées
+        finalDataToDisplay = getCurrentPageData(instance, dataForPagination);
+        console.log(`[Render - ClientSide] After pagination: displaying ${finalDataToDisplay.length} rows`);
     }
 
     // 3. Render Table Structure
@@ -214,7 +233,7 @@ export function render(instance: DataTable): void {
 
     // 4. Render Header & Body
     renderHeader(instance, table);
-    renderStandardBody(instance, table, dataToDisplay);
+    renderStandardBody(instance, table, finalDataToDisplay);
     updateSelectAllCheckboxState(instance);
 
     tableContainer.appendChild(table);
@@ -222,8 +241,18 @@ export function render(instance: DataTable): void {
     instance.element.appendChild(mainContainer);
 
     // 5. Render Pagination Controls
-    if (instance.options.pagination?.enabled && currentTotalRows > state.getRowsPerPage()) {
-        renderPaginationControls(instance, currentTotalRows);
+    // Afficher la pagination si activée ET s'il y a plus de lignes que la limite OU si on est en mode serveur (pour afficher même si 0 résultat serveur)
+    const shouldRenderPagination = instance.options.pagination?.enabled && 
+                                 (currentTotalRows > state.getRowsPerPage() || state.getIsServerSide());
+    
+    // Supprimer les anciens contrôles au cas où ils ne devraient plus être affichés
+    const existingPaginationControls = instance.element.querySelector('#dt-pagination-controls');
+    if (existingPaginationControls) {
+        existingPaginationControls.remove();
+    }
+
+    if (shouldRenderPagination) {
+        renderPaginationControls(instance, currentTotalRows); // Passer le total après filtre/tri
     }
 
     // 6. Dispatch Render Complete Event

@@ -16,9 +16,13 @@ export function getCurrentPageData(instance: DataTable, sourceData: any[][]): an
         return sourceData;
     }
     const rowsPerPage = state.getRowsPerPage();
-    const startIndex = (state.getCurrentPage() - 1) * rowsPerPage;
+    const currentPage = state.getCurrentPage();
+    const startIndex = (currentPage - 1) * rowsPerPage;
     const endIndex = startIndex + rowsPerPage;
-    return sourceData.slice(startIndex, endIndex);
+    console.log(`[getCurrentPageData] Slicing data: rowsPerPage=${rowsPerPage}, currentPage=${currentPage}, startIndex=${startIndex}, endIndex=${endIndex}, sourceLength=${sourceData.length}`);
+    const slicedData = sourceData.slice(startIndex, endIndex);
+    console.log(`[getCurrentPageData] Returned slice length: ${slicedData.length}`);
+    return slicedData;
 }
 
 /**
@@ -69,6 +73,10 @@ export function renderPaginationControls(instance: DataTable, displayRowCount: n
 
     const paginationOptions = instance.options.pagination;
     if (!paginationOptions?.enabled) return; // Ne rien faire si la pagination est désactivée
+    
+    // Vérifier si on a des options pour le sélecteur de lignes/page
+    const rowsPerPageOptions = paginationOptions.rowsPerPageOptions?.filter((n: number) => n > 0);
+    const showRowsPerPageSelector = rowsPerPageOptions && rowsPerPageOptions.length > 0;
 
     const paginationStyle: PaginationStyle = paginationOptions.style || 'numbered-jump'; // Default style
 
@@ -79,7 +87,7 @@ export function renderPaginationControls(instance: DataTable, displayRowCount: n
     paginationContainer.setAttribute('aria-label', 'Pagination');
 
     const currentTotalRows = state.getTotalRows();
-    const displayRows = state.getIsServerSide() ? currentTotalRows : state.getDisplayedData().length;
+    const displayRows = displayRowCount; 
     const rowsPerPage = state.getRowsPerPage();
     const currentPage = state.getCurrentPage();
     const totalPages = Math.ceil(displayRows / rowsPerPage);
@@ -95,11 +103,53 @@ export function renderPaginationControls(instance: DataTable, displayRowCount: n
     const nextContent = paginationOptions.nextButtonContent ?? defaultNextContent;
     const jumpText = paginationOptions.jumpButtonText ?? defaultJumpText;
 
-    // --- Conteneur Gauche (Info) ---
+    // --- Conteneur Gauche (Info + Sélecteur Lignes/Page) ---
     const leftContainer = document.createElement('div');
-    leftContainer.className = 'flex-1 flex justify-start items-center';
+    leftContainer.className = 'flex-1 flex justify-start items-center space-x-4'; // Ajout de space-x-4
+
+    // --- Sélecteur Lignes par Page (si activé) ---
+    if (showRowsPerPageSelector) {
+        const selectorContainer = document.createElement('div');
+        selectorContainer.className = 'flex items-center text-sm text-gray-700';
+
+        const selectorLabel = document.createElement('label');
+        selectorLabel.htmlFor = `${instance.element.id}-rows-per-page`;
+        selectorLabel.textContent = 'Lignes par page:';
+        selectorLabel.className = 'mr-2';
+
+        const selector = document.createElement('select');
+        selector.id = `${instance.element.id}-rows-per-page`;
+        selector.name = 'rows-per-page';
+        selector.className = 'border border-gray-300 rounded-md shadow-sm px-2 py-1 text-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500';
+        selector.setAttribute('aria-label', 'Choisir le nombre de lignes par page');
+
+        rowsPerPageOptions.forEach((optionValue: number) => {
+            const option = document.createElement('option');
+            option.value = String(optionValue);
+            option.textContent = String(optionValue);
+            if (optionValue === rowsPerPage) {
+                option.selected = true;
+            }
+            selector.appendChild(option);
+        });
+
+        selector.addEventListener('change', (event) => {
+            const newRowsPerPage = parseInt((event.target as HTMLSelectElement).value, 10);
+            if (!isNaN(newRowsPerPage) && newRowsPerPage > 0) {
+                console.log(`[Pagination Selector Event] User selected: ${newRowsPerPage}`);
+                state.setRowsPerPage(newRowsPerPage);
+                instance.render(); 
+            }
+        });
+
+        selectorContainer.appendChild(selectorLabel);
+        selectorContainer.appendChild(selector);
+        leftContainer.appendChild(selectorContainer); // Ajouter au conteneur gauche
+    }
+
+    // --- Informations sur les lignes affichées ---
     const infoContainer = document.createElement('div');
-    infoContainer.className = 'text-sm text-gray-700 hidden sm:block'; // Info cachée sur petit écran
+    infoContainer.className = 'text-sm text-gray-700'; // Retrait de hidden sm:block pour le rendre visible
     infoContainer.setAttribute('aria-live', 'polite');
     const p = document.createElement('p');
     if (displayRows > 0) {
@@ -108,9 +158,9 @@ export function renderPaginationControls(instance: DataTable, displayRowCount: n
         p.textContent = 'Aucun résultat';
     }
     infoContainer.appendChild(p);
-    leftContainer.appendChild(infoContainer);
+    leftContainer.appendChild(infoContainer); // Ajouter l'info aussi au conteneur gauche
 
-    // --- Conteneur Droit (Contrôles) ---
+    // --- Conteneur Droit (Contrôles de pagination) ---
     const rightContainer = document.createElement('div');
     rightContainer.className = 'flex justify-end items-center';
 

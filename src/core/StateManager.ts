@@ -9,6 +9,7 @@ interface SavedState {
     filterTerm?: string;
     columnFilters?: { [key: number]: ColumnFilterState }; // Sauvegarder Map comme objet
     columnWidths?: { [key: number]: number }; // Sauvegarder Map comme objet { index: largeurPx }
+    columnOrder?: number[]; // Sauvegarder le tableau d'index directement
 }
 
 export class StateManager {
@@ -27,6 +28,7 @@ export class StateManager {
     private isLoading: boolean = false;
     public columnFilters: Map<number, ColumnFilterState> = new Map();
     public columnWidths: Map<number, number> = new Map();
+    public columnOrder: number[] = [];
 
     private options: DataTableOptions;
     private storageKey: string | null = null;
@@ -84,6 +86,9 @@ export class StateManager {
         // --- État Initial ---
         this.isLoading = false;
 
+        // Initialiser l'ordre par défaut
+        this.columnOrder = options.columns.map((_, index) => index);
+
         // --- Charger l'état sauvegardé (écrase certaines valeurs initiales) ---
         this._loadState();
 
@@ -93,6 +98,13 @@ export class StateManager {
             this.displayedData = this.originalData;
         } else {
             this.totalRows = this.originalData.length;
+        }
+
+        // Si l'état chargé n'avait pas d'ordre (ancienne version), s'assurer qu'il est initialisé
+        if (this.columnOrder.length !== options.columns.length) {
+             this.columnOrder = options.columns.map((_, index) => index);
+             // Optionnel: sauvegarder immédiatement ce nouvel ordre par défaut?
+             // this._saveState(); 
         }
 
         // Initialiser les largeurs depuis les options si présentes (en pixels)
@@ -125,6 +137,7 @@ export class StateManager {
     getIsLoading(): boolean { return this.isLoading; }
     getColumnFilters(): Map<number, ColumnFilterState> { return this.columnFilters; }
     getColumnWidths(): Map<number, number> { return new Map(this.columnWidths); }
+    getColumnOrder(): number[] { return [...this.columnOrder]; }
 
     // --- Setters / Mutators ---
     setCurrentPage(page: number): void {
@@ -133,8 +146,17 @@ export class StateManager {
     }
 
     setRowsPerPage(rows: number): void {
+        // Log ici
+        console.log(`[StateManager.setRowsPerPage] Setting rowsPerPage from ${this.rowsPerPage} to ${rows}`);
+        const oldRowsPerPage = this.rowsPerPage;
         this.rowsPerPage = rows;
-        this.currentPage = 1;
+        
+        // Réinitialiser la page actuelle seulement si la limite change réellement
+        // Et s'assurer que la page 1 existe toujours
+        if (oldRowsPerPage !== rows) {
+             this.currentPage = 1;
+             console.log(`[StateManager.setRowsPerPage] Resetting currentPage to 1`);
+        }
         this._saveState();
     }
 
@@ -268,7 +290,8 @@ export class StateManager {
             selectedRowIds: Array.from(this.selectedRowIds),
             isLoading: this.isLoading,
             columnFilters: Object.fromEntries(this.columnFilters),
-            columnWidths: Object.fromEntries(this.columnWidths)
+            columnWidths: Object.fromEntries(this.columnWidths),
+            columnOrder: this.columnOrder
         };
     }
 
@@ -285,7 +308,8 @@ export class StateManager {
             sortDirection: this.sortDirection,
             filterTerm: this.filterTerm,
             columnFilters: Object.fromEntries(this.columnFilters),
-            columnWidths: Object.fromEntries(this.columnWidths) 
+            columnWidths: Object.fromEntries(this.columnWidths),
+            columnOrder: this.columnOrder
         };
         try {
             localStorage.setItem(this.storageKey, JSON.stringify(stateToSave));
@@ -316,6 +340,15 @@ export class StateManager {
                 if (savedState.columnWidths !== undefined) {
                     this.columnWidths = new Map(Object.entries(savedState.columnWidths).map(([key, value]) => [parseInt(key, 10), value as number]));
                 }
+                // Charger l'ordre sauvegardé (avec validation)
+                if (Array.isArray(savedState.columnOrder) && savedState.columnOrder.length === this.options.columns.length) {
+                     // Vérification supplémentaire que tous les index sont présents?
+                     // Pour l'instant, on fait confiance à la longueur.
+                     this.columnOrder = savedState.columnOrder;
+                } else if (savedState.columnOrder !== undefined) {
+                    console.warn("[StateManager] Ordre de colonnes sauvegardé invalide, utilisation de l'ordre par défaut.");
+                    // L'ordre par défaut sera appliqué après _loadState si nécessaire
+                }
             }
         } catch (error) {
             console.error("[StateManager] Failed to load state from localStorage:", error);
@@ -328,5 +361,17 @@ export class StateManager {
     setColumnWidth(index: number, width: number): void {
         this.columnWidths.set(index, Math.max(width, 20)); // Largeur minimale de 20px?
         this._saveState(); // Sauvegarder l'état après modification de largeur
+    }
+
+    // Nouvelle méthode pour définir l'ordre des colonnes
+    setColumnOrder(newOrder: number[]): void {
+        // Validation simple: vérifier si le nombre d'éléments correspond
+        if (newOrder.length === this.options.columns.length) {
+             this.columnOrder = newOrder;
+             this._saveState(); // Sauvegarder le nouvel ordre
+             // Note: Le changement d'ordre nécessite un re-rendu complet pour être appliqué
+        } else {
+            console.error("[StateManager] Tentative de définir un ordre de colonnes invalide.", newOrder);
+        }
     }
 } 
