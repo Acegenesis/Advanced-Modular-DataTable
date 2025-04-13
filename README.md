@@ -29,7 +29,7 @@ Une classe TypeScript simple pour créer des tableaux de données HTML interacti
 ## Installation
 
 1.  **Compilez le code TypeScript :**
-    ```bash
+```bash
     npm install # Si vous ne l'avez pas déjà fait pour installer TypeScript, etc.
     npm run build # Ou la commande équivalente dans votre projet (ex: tsc)
     ```

@@ -2,40 +2,46 @@
 
 // Type pour définir une colonne
 interface ColumnDefinition {
-    title: string; // Titre affiché dans l'en-tête
-    type?: 'string' | 'number' | 'mail' | 'tel' | 'money'; // Types prédéfinis
-    // dataProperty?: string; // Pour lier à une propriété d'objet (ajout futur)
-    render?: (cellData: any, rowData: any[]) => string | HTMLElement; // Fonction de rendu personnalisé (prioritaire)
-    sortable?: boolean; // Option pour rendre cette colonne spécifiquement triable
-    searchable?: boolean; // Option pour inclure dans la recherche (ajout futur)
-    locale?: string; // Pour formatage de nombre/devise (ex: 'en-US', 'fr-FR')
-    currency?: string; // Code ISO 4217 pour type='money' (ex: 'USD', 'EUR')
+    title: string; 
+    type?: 'string' | 'number' | 'mail' | 'tel' | 'money'; 
+    render?: (cellData: any, rowData: any[]) => string | HTMLElement | DocumentFragment; 
+    sortable?: boolean; 
+    searchable?: boolean; 
+    locale?: string; 
+    currency?: string; 
+    width?: string; // Nouvelle propriété optionnelle pour la largeur (ex: '150px', '20%')
 }
 
-// Nouvelle interface pour définir une action sur une ligne
+// Interface pour les actions
 interface RowAction {
-    label: string;        // Texte affiché sur le bouton
-    actionId: string;     // Identifiant unique pour l'action (ex: 'edit', 'delete', 'view')
-    className?: string;   // Classes CSS optionnelles pour le bouton
+    label: string;        
+    actionId: string;     
+    className?: string;   
 }
 
+// Options principales
 interface DataTableOptions {
-    // Remplacer string[] par ColumnDefinition[]
     columns: ColumnDefinition[]; 
     data: any[][];    
     pagination?: {
         enabled: boolean;
-        rowsPerPage?: number; // Nombre de lignes par page (par défaut 10)
+        rowsPerPage?: number; 
     };
     sorting?: {
         enabled: boolean;
     };
     searching?: {
         enabled: boolean;
-        debounceTime?: number; // Temps en ms pour le debounce (défaut 300)
+        debounceTime?: number; 
     };
-    // Nouvelle option pour les actions sur les lignes
     rowActions?: RowAction[];
+    processingMode?: 'client' | 'server'; // 'client' (default) or 'server'
+    serverSideTotalRows?: number;      // Required if processingMode is 'server'
+    selection?: {
+        enabled: boolean;
+        mode?: 'single' | 'multiple'; // Défaut 'multiple' si activé
+        initialSelectedIds?: any[];   // IDs des lignes initialement sélectionnées (basé sur rowData[0])
+    };
 }
 
 type SortDirection = 'asc' | 'desc' | 'none';
@@ -44,13 +50,18 @@ export class DataTable {
     private element: HTMLElement;
     private options: DataTableOptions;
     private currentPage: number = 1;
-    private rowsPerPage: number = 10; // Valeur par défaut
+    private rowsPerPage: number = 10; 
     private totalRows: number = 0;
     private sortColumnIndex: number | null = null;
     private sortDirection: SortDirection = 'none';
-    private originalData: any[][]; // Conserver les données originales
+    private originalData: any[][]; // Holds original data in client mode, or current page data in server mode
     private filterTerm: string = '';
     private debounceTimer: number | null = null;
+    private isServerSide: boolean = false;
+    private selectionEnabled: boolean = false;
+    private selectionMode: 'single' | 'multiple' = 'multiple';
+    private selectedRowIds: Set<any> = new Set();
+    private selectAllCheckbox: HTMLInputElement | null = null;
 
     constructor(elementId: string, options: DataTableOptions) {
         const targetElement = document.getElementById(elementId);
@@ -59,12 +70,10 @@ export class DataTable {
         }
         this.element = targetElement;
 
-        // Copie superficielle des options pour isoler l'instance
-        // tout en préservant les références aux fonctions (comme render)
+        // --- Options Setup --- 
         this.options = { ...options }; 
-        // Copier explicitement les tableaux/objets imbriqués importants
+        // Deep copy sensitive options
         if (options.columns) {
-            // Créer un nouveau tableau et copier chaque objet colonne superficiellement
             this.options.columns = options.columns.map(col => ({ ...col }));
         }
         if (options.pagination) {
@@ -76,97 +85,120 @@ export class DataTable {
          if (options.searching) {
             this.options.searching = { ...options.searching };
         }
-        // Copier les actions si elles existent
         if (options.rowActions) {
             this.options.rowActions = options.rowActions.map(action => ({ ...action }));
         }
-
-        // Copie profonde UNIQUEMENT pour les données originales car elles servent de base immuable
+        
+        // --- Mode Setup --- 
+        this.isServerSide = options.processingMode === 'server';
+        
+        // --- Data Setup --- 
         this.originalData = options.data ? JSON.parse(JSON.stringify(options.data)) : [];
-
-        // Initialiser le total basé sur les données originales
+        if (this.isServerSide) {
+            this.totalRows = options.serverSideTotalRows ?? 0;
+        } else {
         this.totalRows = this.originalData.length;
+        }
 
-        // Configurer la pagination si activée
+        // --- Pagination Setup --- 
         if (this.options.pagination?.enabled) {
             this.rowsPerPage = this.options.pagination.rowsPerPage ?? 10;
         }
-        // Toujours initialiser currentPage
         this.currentPage = 1;
 
-        // Initialiser l'état du tri et du filtre
+        // --- Initial State --- 
         this.sortColumnIndex = null;
         this.sortDirection = 'none';
         this.filterTerm = '';
         this.debounceTimer = null;
 
-        this.render(); // Appel initial pour afficher le tableau
+        // --- Initialisation Sélection --- 
+        if (options.selection?.enabled) {
+            this.selectionEnabled = true;
+            this.selectionMode = options.selection.mode ?? 'multiple';
+            if (options.selection.initialSelectedIds) {
+                this.selectedRowIds = new Set(options.selection.initialSelectedIds);
+            }
+            console.log(`DataTable: Sélection ${this.selectionMode} activée.`);
+        }
+        // ------------------------------
+
+        // Initial Render
+        this.render(); 
     }
 
+    // --- Public API Method: Destroy --- 
+    public destroy(): void {
+        this.element.innerHTML = '';
+        if (this.debounceTimer) clearTimeout(this.debounceTimer);
+        // Remove other listeners if any were added directly to document/window
+        console.log("DataTable instance destroyed");
+    }
+
+    // --- Core Rendering Logic --- 
     private render(): void {
-        this.element.innerHTML = ''; // Vider avant de redessiner
+        this.element.innerHTML = ''; 
+        const mainContainer = document.createElement('div'); 
 
-        // Créer un conteneur externe pour l'ombre et les coins arrondis
-        const container = document.createElement('div');
-        container.className = 'mt-6 shadow overflow-hidden border-b border-gray-200 sm:rounded-lg';
-
-        // 1. Rendu du champ de recherche (placé à l'extérieur du conteneur de table pour cet exemple)
+        // 1. Search Input
         if (this.options.searching?.enabled) {
-            this.renderSearchInput(this.element); // Passer l'élément principal pour l'ajout
+            this.renderSearchInput(mainContainer); 
         }
+ 
+        // 2. Data Preparation (Filter/Sort only in client mode)
+        let dataToDisplay = this.isServerSide ? [...this.originalData] : [...this.originalData]; // Start with appropriate data
+        if (!this.isServerSide) {
+            const filteredData = this.getFilteredData(dataToDisplay); // Pass data to filter
+            const sortedData = this.sortDataIfEnabled(filteredData);   // Pass filtered data to sort
+            dataToDisplay = sortedData; // Final data for client-side display
+            this.totalRows = dataToDisplay.length; // Update total based on filtered/sorted data
+        } // In server mode, totalRows is already set, dataToDisplay is the current page.
 
-        // 2. Filtrer les données
-        const filteredData = this.getFilteredData();
-        this.totalRows = filteredData.length; 
+        // 3. Table Structure
+        const tableContainer = document.createElement('div');
+        tableContainer.className = 'mt-6 shadow overflow-x-auto border-b border-gray-200 sm:rounded-lg'; // overflow-x-auto added
 
-        // 3. Trier les données filtrées
-        const sortedData = this.sortDataIfEnabled(filteredData);
-
-        // 4. Rendu du tableau à l'intérieur du conteneur
         const table = document.createElement('table');
-        // Classes pour la table elle-même (plus simple maintenant)
-        table.className = 'min-w-full divide-y divide-gray-200'; 
-        // --- A11y: Rôle sémantique pour le tableau ---
+        table.className = 'min-w-full border-collapse table-fixed'; // Use table-layout: fixed !
+        table.style.width = '100%';
         table.setAttribute('role', 'grid');
-        // -------------------------------------------
+ 
+        // 4. Render Header & Body
         this.renderHeader(table);
-        this.renderBody(table, sortedData);
-        container.appendChild(table); // Ajouter la table au conteneur stylé
-        this.element.appendChild(container); // Ajouter le conteneur à l'élément principal
-
-        // 5. Rendu de la pagination (placé après le conteneur de table)
+        this.renderStandardBody(table, dataToDisplay); // Rend le TBODY standard
+        this.updateSelectAllCheckboxState(); 
+       
+        tableContainer.appendChild(table);
+        mainContainer.appendChild(tableContainer);
+        this.element.appendChild(mainContainer);
+ 
+        // 5. Render Pagination (if applicable)
         if (this.options.pagination?.enabled && this.totalRows > this.rowsPerPage) {
             this.renderPaginationControls(); 
         }
 
-        // 6. Émettre l'événement de fin de rendu
+        // 6. Dispatch Render Complete Event
         this.dispatchEvent('dt:renderComplete');
     }
 
-    // Modifié pour accepter l'élément parent où ajouter l'input
-    private renderSearchInput(parentElement: HTMLElement): void {
-        // --- A11y: Générer un ID unique pour l'input et le label ---
-        const inputId = `datatable-search-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+    // --- Rendering Helper Methods --- 
 
-        // --- A11y: Ajouter un label (caché visuellement) ---
+    private renderSearchInput(parentElement: HTMLElement): void {
+        const inputId = `datatable-search-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
         const label = document.createElement('label');
         label.htmlFor = inputId;
-        label.className = 'sr-only'; // Classe Tailwind pour masquer visuellement mais accessible aux lecteurs
-        label.textContent = 'Filtrer le tableau';
+        label.className = 'sr-only'; 
+        label.textContent = this.isServerSide ? 'Rechercher dans les données' : 'Filtrer le tableau';
         parentElement.appendChild(label);
-        // --------------------------------------------------
-
+        
         const searchInput = document.createElement('input');
         searchInput.type = 'search';
         searchInput.placeholder = 'Rechercher...';
-        // Style moderne pour l'input
         searchInput.className = 'block w-full md:w-1/2 mb-4 px-4 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm';
         searchInput.value = this.filterTerm;
-        // --- A11y: Lier le label et ajouter le rôle ---
         searchInput.id = inputId;
         searchInput.setAttribute('role', 'searchbox');
-        searchInput.setAttribute('aria-controls', this.element.id + '-tbody'); // Lier au corps du tableau si tbody a un id
-        // --------------------------------------------
+        searchInput.setAttribute('aria-controls', this.element.id + '-tbody'); 
 
         searchInput.addEventListener('input', (event) => {
             const target = event.target as HTMLInputElement;
@@ -179,324 +211,356 @@ export class DataTable {
 
             this.debounceTimer = window.setTimeout(() => {
                 this.filterTerm = searchTerm;
-                this.currentPage = 1; 
-
-                // Émettre l'événement AVANT de redessiner
+                this.currentPage = 1; // Reset to page 1 on search
                 this.dispatchEvent('dt:search', { searchTerm: this.filterTerm });
-                
-                this.render(); 
+                if (!this.isServerSide) {
+                     this.render(); // Re-render only in client mode
+                }
             }, debounceTime);
         });
-
-        parentElement.appendChild(searchInput); // Ajouter à l'élément parent fourni
-    }
-
-    private getFilteredData(): any[][] {
-        if (!this.options.searching?.enabled || !this.filterTerm) {
-            return [...this.originalData]; // Retourner une copie pour éviter modifications externes
-        }
-
-        const searchTermLower = this.filterTerm.toLowerCase();
-
-        return this.originalData.filter(row => {
-            for (let cellIndex = 0; cellIndex < row.length; cellIndex++) {
-                const cellData = row[cellIndex];
-                const columnDef = this.options.columns[cellIndex];
-                
-                // Récupérer la valeur searchable explicitement
-                const columnIsDefined = columnDef !== null && columnDef !== undefined;
-                const searchableOption = columnIsDefined ? columnDef.searchable : undefined;
-                // Calculer isSearchable
-                const isSearchable = searchableOption !== false; 
-
-                // Vérifier si la colonne est searchable AVANT de vérifier le contenu
-                if (isSearchable === true) {
-                    if (String(cellData).toLowerCase().includes(searchTermLower)) {
-                        return true; 
-                    }
-                } 
-                // Sinon (isSearchable est false), ne RIEN faire pour cette cellule
-            }
-            return false; 
-        });
-    }
-
-    private sortDataIfEnabled(dataToSort: any[][]): any[][] {
-        // Si aucun tri n'est actif, retourner les données telles quelles
-        if (!this.options.sorting?.enabled || this.sortColumnIndex === null || this.sortDirection === 'none') {
-            return dataToSort;
-        }
-
-        // Copier pour ne pas modifier l'array filtré original en place
-        const sortedData = [...dataToSort];
-
-        sortedData.sort((a, b) => {
-            // Utiliser l'index et la direction stockés
-            const columnIndex = this.sortColumnIndex as number;
-            const direction = this.sortDirection;
-
-            const valA = a[columnIndex];
-            const valB = b[columnIndex];
-
-            const numA = parseFloat(valA);
-            const numB = parseFloat(valB);
-            if (!isNaN(numA) && !isNaN(numB)) {
-                return direction === 'asc' ? numA - numB : numB - numA;
-            }
-
-            const strA = String(valA);
-            const strB = String(valB);
-            if (strA < strB) return direction === 'asc' ? -1 : 1;
-            if (strA > strB) return direction === 'asc' ? 1 : -1;
-            return 0;
-        });
-
-        return sortedData;
+        parentElement.appendChild(searchInput); 
     }
 
     private renderHeader(table: HTMLTableElement): void {
         const thead = table.createTHead();
-        // Header un peu plus clair
         thead.className = 'bg-gray-50'; 
+        // --- Apply sticky header styles --- 
+        thead.style.position = 'sticky';
+        thead.style.top = '0';
+        thead.style.zIndex = '10'; // Ensure it stays above body content
+        // ----------------------------------
         const headerRow = thead.insertRow();
-        // --- A11y: Rôle pour la ligne d'en-tête ---
         headerRow.setAttribute('role', 'row');
-        // -----------------------------------------
+
+        // --- Ajouter la colonne checkbox "Select All" si activé ---
+        if (this.selectionEnabled && this.selectionMode === 'multiple') { // Seulement en multiple
+            const thCheckbox = document.createElement('th');
+            thCheckbox.scope = 'col';
+            thCheckbox.setAttribute('role', 'columnheader');
+            // Ajuster padding, etc. pour la checkbox
+            thCheckbox.className = 'px-4 py-3 text-center w-12'; 
+            thCheckbox.style.boxSizing = 'border-box';
+
+            this.selectAllCheckbox = document.createElement('input');
+            this.selectAllCheckbox.type = 'checkbox';
+            this.selectAllCheckbox.className = 'form-checkbox h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500';
+            // Mettre à jour l'état initial lors du rendu
+            this.updateSelectAllCheckboxState(); 
+            this.selectAllCheckbox.setAttribute('aria-label', 'Sélectionner toutes les lignes visibles');
+
+            this.selectAllCheckbox.addEventListener('change', (event) => {
+                const isChecked = (event.target as HTMLInputElement).checked;
+                this.handleSelectAllClick(isChecked);
+            });
+
+            thCheckbox.appendChild(this.selectAllCheckbox);
+            headerRow.appendChild(thCheckbox);
+        }
+        // -------------------------------------------------------
 
         this.options.columns.forEach((columnDef, index) => { 
             const th = document.createElement('th');
-            th.textContent = columnDef.title || ''; 
             th.scope = 'col';
-            // --- A11y: Rôle pour cellule d'en-tête ---
             th.setAttribute('role', 'columnheader');
-            // ---------------------------------------
-            // Padding ajusté, texte un peu plus visible
-            th.className = 'px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider';
+            th.className = 'px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider whitespace-nowrap overflow-hidden text-ellipsis'; // Ajout overflow/ellipsis
+            th.style.boxSizing = 'border-box'; 
+            
+            // --- Appliquer la largeur si spécifiée --- 
+            if (columnDef.width) {
+                th.style.width = columnDef.width;
+            }
+            // -------------------------------------
+
+            const titleSpan = document.createElement('span');
+            titleSpan.textContent = columnDef.title || ''; 
+            th.appendChild(titleSpan);
 
             const isSortable = this.options.sorting?.enabled && columnDef.sortable !== false;
-
             if (isSortable) { 
-                // Hover plus subtil, transition ajoutée
                 th.classList.add('cursor-pointer', 'hover:bg-gray-100', 'transition-colors', 'duration-150'); 
                 th.addEventListener('click', () => this.handleSortClick(index));
                 
                 let indicatorSymbol = '';
                 let ariaSortValue: "ascending" | "descending" | "none" = "none";
-                // --- A11y: Texte alternatif pour l'état de tri ---
                 let sortDescription = '';
-                // ----------------------------------------------
 
                 if (this.sortColumnIndex === index && this.sortDirection !== 'none') {
                     indicatorSymbol = this.sortDirection === 'asc' ? ' ▲' : ' ▼';
                     ariaSortValue = this.sortDirection === 'asc' ? 'ascending' : 'descending';
-                    // Fond pour la colonne triée
                     th.classList.add('bg-gray-100'); 
-                    // --- A11y ---
                     sortDescription = this.sortDirection === 'asc' ? 'trié par ordre croissant' : 'trié par ordre décroissant';
-                    // -----------
                  } else {
                     indicatorSymbol = ' ↕'; 
                     ariaSortValue = 'none'; 
-                     // --- A11y ---
-                     sortDescription = 'non trié';
-                     // -----------
+                    sortDescription = 'non trié';
                  }
-                 // Span pour l'indicateur pour un meilleur contrôle potentiel du style
                  const indicatorSpan = document.createElement('span');
-                 indicatorSpan.className = 'ml-1'; // Espace avant l'indicateur
+                 indicatorSpan.className = 'ml-1'; 
+                 indicatorSpan.setAttribute('aria-hidden', 'true'); // Hide decorative indicator
                  indicatorSpan.textContent = indicatorSymbol;
                  th.appendChild(indicatorSpan);
                  th.setAttribute('aria-sort', ariaSortValue);
-
-                 // --- A11y: Ajouter le texte descriptif caché ---
+                 
                  const accessibleDescription = document.createElement('span');
-                 accessibleDescription.className = 'sr-only'; // Masqué visuellement
+                 accessibleDescription.className = 'sr-only'; 
                  accessibleDescription.textContent = `, ${sortDescription}, cliquez pour changer l'ordre de tri`;
                  th.appendChild(accessibleDescription);
-                 // ---------------------------------------------
-                 
             } 
             headerRow.appendChild(th);
         });
         
-        // Ajouter l'en-tête pour les actions si elles sont définies
+        // Add header for actions column if needed
         if (this.options.rowActions && this.options.rowActions.length > 0) {
             const thActions = document.createElement('th');
+            // --- Appliquer une largeur spécifique pour la colonne Action si possible ---
+            // Recherche d'une définition de colonne "Actions" potentielle (peu probable)
+            // ou définition d'une largeur par défaut/via une option globale ?
+            // Pour l'instant, on laisse le navigateur décider ou on utilise une largeur fixe via CSS externe.
+            // Alternative : Ajouter une option globale `options.actionColumnWidth = '120px'`
             thActions.scope = 'col';
-            thActions.className = 'px-6 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider'; // Alignement à droite
-            thActions.textContent = 'Actions'; // Ou laisser vide: ''
+            thActions.setAttribute('role', 'columnheader');
+            thActions.className = 'px-6 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider whitespace-nowrap overflow-hidden text-ellipsis';
+            thActions.textContent = 'Actions'; 
+            thActions.style.boxSizing = 'border-box';
             headerRow.appendChild(thActions);
         }
     }
 
-    private renderBody(table: HTMLTableElement, data: any[][]): void {
-        const tbody = table.createTBody();
+    // This is the primary body rendering method now
+    private renderStandardBody(table: HTMLTableElement, data: any[][]): void {
+        let tbody = table.querySelector('tbody');
+        if (tbody) {
+            tbody.remove(); // Remove old tbody if exists
+        }
+        tbody = table.createTBody();
         tbody.className = 'bg-white divide-y divide-gray-200';
-        // --- A11y: Ajouter un ID au tbody pour aria-controls ---
-        tbody.id = this.element.id + '-tbody';
-        // ---------------------------------------------------
-        const dataToRender = this.options.pagination?.enabled
+        tbody.id = this.element.id + '-tbody'; 
+
+        // Determine which data to render based on pagination (client mode only)
+        const dataToRender = this.options.pagination?.enabled && !this.isServerSide
             ? this.getCurrentPageData(data)
             : data;
 
-        tbody.innerHTML = ''; 
-
         if (dataToRender.length === 0) {
-            // Afficher une ligne indiquant qu'il n'y a pas de données
             const row = tbody.insertRow();
             const cell = row.insertCell();
-            // Calculer le nombre de colonnes de données + potentielle colonne d'actions
-            const totalColumnCount = this.options.columns.length + 
-                                   (this.options.rowActions && this.options.rowActions.length > 0 ? 1 : 0);
-
-            // Recalculer le colSpan en fonction du nombre total de colonnes
-            cell.colSpan = totalColumnCount;
-            cell.className = 'px-6 py-12 text-center text-sm text-gray-500'; // Centré et espacé
+           const totalColumnCount = this.options.columns.length + (this.options.rowActions && this.options.rowActions.length > 0 ? 1 : 0);
+           cell.colSpan = totalColumnCount;
+           cell.className = 'px-6 py-12 text-center text-sm text-gray-500';
             cell.textContent = this.filterTerm ? 'Aucun résultat trouvé pour votre recherche.' : 'Aucune donnée à afficher.';
-            return; // Sortir si pas de données
+           return;
         }
 
+        // Render rows
         dataToRender.forEach(rowData => {
-            const row = tbody.insertRow();
-            // Transition sur le hover
-            row.className = 'hover:bg-gray-50 transition-colors duration-150'; 
-            // --- A11y: Rôle pour la ligne de données ---
-            row.setAttribute('role', 'row');
+            const row = tbody!.insertRow(); 
+            // --- Appliquer la classe si sélectionné --- 
+            const rowId = rowData[0]; // Assumer ID en colonne 0
+            const isSelected = this.selectedRowIds.has(rowId);
+            row.className = `hover:bg-gray-50 transition-colors duration-150 ${isSelected ? 'dt-row-selected bg-indigo-50' : ''}`;
             // -----------------------------------------
-            // Calculer le nombre de colonnes de données + potentielle colonne d'actions
-            const totalColumnCount = this.options.columns.length + 
-                                   (this.options.rowActions && this.options.rowActions.length > 0 ? 1 : 0);
+            row.setAttribute('role', 'row');
+            row.setAttribute('aria-selected', isSelected ? 'true' : 'false'); // A11y
 
-            // Recalculer le colSpan en fonction du nombre total de colonnes
+            // --- Ajouter la cellule checkbox si activé ---
+            if (this.selectionEnabled) {
+                const tdCheckbox = row.insertCell();
+                tdCheckbox.className = 'px-4 py-4 text-center align-middle'; // Ajuster padding
+                tdCheckbox.setAttribute('role', 'gridcell');
+
+                const rowCheckbox = document.createElement('input');
+                rowCheckbox.type = 'checkbox';
+                rowCheckbox.className = 'form-checkbox h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500';
+                rowCheckbox.checked = isSelected;
+                rowCheckbox.setAttribute('aria-label', `Sélectionner ligne ${rowId}`);
+
+                rowCheckbox.addEventListener('change', (event) => {
+                    const isChecked = (event.target as HTMLInputElement).checked;
+                    this.handleRowCheckboxClick(rowId, rowData, isChecked, row);
+                });
+                 tdCheckbox.appendChild(rowCheckbox);
+            }
+            // ------------------------------------------
+
             rowData.forEach((cellData, cellIndex) => {
                 const cell = row.insertCell();
-                 // Texte principal un peu plus foncé, alignement vertical
-                cell.className = 'px-6 py-4 whitespace-nowrap text-sm text-gray-800 align-middle'; 
-                // --- A11y: Rôle pour la cellule de données ---
+                // Apply standard cell classes + overflow handling needed with table-fixed
+                cell.className = 'px-6 py-4 text-sm text-gray-800 align-middle whitespace-nowrap overflow-hidden text-ellipsis';
                 cell.setAttribute('role', 'gridcell');
-                // ------------------------------------------
                 const columnDef = this.options.columns[cellIndex]; 
 
                 if (columnDef && typeof columnDef.render === 'function') { 
-                    try {
-                        const renderedContent = columnDef.render(cellData, rowData);
-                        this.appendRenderedContent(cell, renderedContent);
-                    } catch (error) {
-                        console.error(`Erreur dans la fonction render pour la colonne "${columnDef.title}" :`, error);
-                        this.appendRenderedContent(cell, '[Erreur Rendu]', true);
-                    }
-                } 
-                else if (columnDef && columnDef.type) {
+                    try { this.appendRenderedContent(cell, columnDef.render(cellData, rowData)); }
+                    catch (error) { console.error('Render error:', error); this.appendRenderedContent(cell, '[Erreur Rendu]', true); }
+                } else if (columnDef && columnDef.type) {
                     this.renderCellByType(cell, cellData, columnDef);
-                } 
-                else {
+                } else {
                     this.appendRenderedContent(cell, cellData); 
                 }
             });
-            
-            // Ajouter la cellule d'actions si des actions sont définies
+
             if (this.options.rowActions && this.options.rowActions.length > 0) {
                 this.renderActionButtons(row, rowData);
             }
         });
     }
 
-    // Nouvelle méthode pour créer les boutons d'action pour une ligne
-    private renderActionButtons(row: HTMLTableRowElement, rowData: any[]): void {
-        const cell = row.insertCell();
-        // Styles pour la cellule d'actions: alignement à droite, ne pas couper le texte
-        cell.className = 'px-6 py-4 whitespace-nowrap text-right text-sm font-medium align-middle';
+    private renderPaginationControls(): void {
+        let paginationContainer = this.element.querySelector('#dt-pagination-controls');
+        if (paginationContainer) { paginationContainer.remove(); } // Remove old controls
 
-        this.options.rowActions?.forEach((actionDef, index) => {
-            const button = document.createElement('button');
-            button.textContent = actionDef.label;
-            // Classes par défaut + classes personnalisées. Ajout d'une marge sauf pour le premier bouton.
-            button.className = `text-indigo-600 hover:text-indigo-900 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 ${index > 0 ? 'ml-4' : ''} ${actionDef.className || ''}`;
-            button.type = 'button'; // Important pour éviter soumission de formulaire
+        paginationContainer = document.createElement('div');
+        paginationContainer.id = 'dt-pagination-controls';
+        paginationContainer.className = 'bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6 mt-1';
+        paginationContainer.setAttribute('role', 'navigation');
+        paginationContainer.setAttribute('aria-label', 'Pagination');
 
-            button.addEventListener('click', (event) => {
-                event.stopPropagation(); // Empêche le déclenchement d'autres événements (ex: clic sur la ligne)
-                
-                // Émettre l'événement dt:actionClick
-                this.dispatchEvent('dt:actionClick', { 
-                    action: actionDef.actionId, 
-                    rowData: rowData 
-                });
-            });
+        const currentTotalRows = this.totalRows; 
+        const totalPages = Math.ceil(currentTotalRows / this.rowsPerPage);
+        const startItem = currentTotalRows === 0 ? 0 : (this.currentPage - 1) * this.rowsPerPage + 1;
+        const endItem = Math.min(startItem + this.rowsPerPage - 1, currentTotalRows);
 
-            cell.appendChild(button);
+        const flexContainer = document.createElement('div');
+        flexContainer.className = 'flex-1 flex justify-between sm:hidden'; 
+        // Add mobile buttons if needed
+
+        const hiddenOnMobileContainer = document.createElement('div');
+        hiddenOnMobileContainer.className = 'hidden sm:flex-1 sm:flex sm:items-center sm:justify-between'; 
+
+        const infoContainer = document.createElement('div');
+        infoContainer.className = 'text-sm text-gray-700';
+        infoContainer.setAttribute('aria-live', 'polite'); 
+        const p = document.createElement('p'); 
+        if (currentTotalRows > 0) {
+            p.innerHTML = `Affichage <span class="font-medium text-gray-900">${startItem}</span> à <span class="font-medium text-gray-900">${endItem}</span> sur <span class="font-medium text-gray-900">${currentTotalRows}</span> résultats`;
+        } else {
+            p.textContent = 'Aucun résultat';
+        }
+        infoContainer.appendChild(p);
+
+        const buttonContainer = document.createElement('div');
+        buttonContainer.className = 'relative z-0 inline-flex rounded-md shadow-sm -space-x-px'; 
+
+        const prevButton = document.createElement('button');
+        prevButton.disabled = this.currentPage === 1;
+        prevButton.className = 'relative inline-flex items-center px-3 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 focus:z-10 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition ease-in-out duration-150';
+        prevButton.setAttribute('aria-label', 'Page précédente');
+        if (prevButton.disabled) {
+            prevButton.setAttribute('aria-disabled', 'true');
+        }
+        prevButton.innerHTML = `<svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>`;
+        prevButton.addEventListener('click', () => {
+            if (this.currentPage > 1) {
+                this.currentPage--;
+                this.dispatchPageChangeEvent();
+                if (!this.isServerSide) {
+                    this.render(); 
+                }
+            }
+        });
+
+        const nextButton = document.createElement('button');
+        nextButton.disabled = this.currentPage === totalPages || currentTotalRows === 0;
+        nextButton.className = 'relative inline-flex items-center px-3 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 focus:z-10 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition ease-in-out duration-150';
+        nextButton.setAttribute('aria-label', 'Page suivante');
+        if (nextButton.disabled) {
+            nextButton.setAttribute('aria-disabled', 'true');
+        }
+        nextButton.innerHTML = `<svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" /></svg>`;
+        nextButton.addEventListener('click', () => {
+            const totalPages = Math.ceil(this.totalRows / this.rowsPerPage);
+            if (this.currentPage < totalPages) {
+                this.currentPage++;
+                this.dispatchPageChangeEvent();
+                if (!this.isServerSide) {
+                     this.render(); 
+                }
+            }
+        });
+
+        buttonContainer.appendChild(prevButton);
+        buttonContainer.appendChild(nextButton);
+
+        hiddenOnMobileContainer.appendChild(infoContainer);
+        hiddenOnMobileContainer.appendChild(buttonContainer);
+
+        paginationContainer.appendChild(flexContainer); 
+        paginationContainer.appendChild(hiddenOnMobileContainer);
+
+        this.element.appendChild(paginationContainer); 
+    }
+    
+    // --- Data Handling Methods --- 
+
+    private getFilteredData(data: any[][]): any[][] {
+        if (!this.options.searching?.enabled || !this.filterTerm) {
+            return data; // Return original data passed (or copy if needed?)
+        }
+        // Client-side filtering logic (only called if !isServerSide)
+        const searchTermLower = this.filterTerm.toLowerCase();
+        return data.filter(row => {
+            for (let cellIndex = 0; cellIndex < row.length; cellIndex++) {
+                const columnDef = this.options.columns[cellIndex];
+                const isSearchable = !columnDef || columnDef.searchable !== false; 
+                if (isSearchable) {
+                    if (String(row[cellIndex]).toLowerCase().includes(searchTermLower)) {
+                        return true; 
+                    }
+                } 
+            }
+            return false; 
         });
     }
 
-    private appendRenderedContent(cell: HTMLTableCellElement, content: any, isError: boolean = false): void {
-        // ATTENTION: Si vous utilisez la fonction 'render' pour retourner du HTML sous forme de chaîne,
-        // assurez-vous que ce contenu est correctement échappé pour éviter les failles XSS.
-        // La classe DataTable ne nettoie pas le HTML fourni par la fonction render.
-        if (content instanceof HTMLElement) {
-             cell.appendChild(content); // Ajouter l'élément DOM
-        } else if (content instanceof DocumentFragment) {
-            cell.appendChild(content); // Ajouter un fragment de document
-        } else {
-            // Cas par défaut pour autres types (null, undefined, number, string...)
-            cell.textContent = String(content); // Utiliser textContent par défaut pour la sécurité
+    private sortDataIfEnabled(dataToSort: any[][]): any[][] {
+        if (!this.options.sorting?.enabled || this.sortColumnIndex === null || this.sortDirection === 'none') {
+            return dataToSort;
         }
-        if (isError) {
-            cell.classList.add('text-red-600', 'dark:text-red-400');
-        }
+        // Client-side sorting logic (only called if !isServerSide)
+        const sortedData = [...dataToSort]; // Sort copy
+        const columnIndex = this.sortColumnIndex;
+        const direction = this.sortDirection;
+
+        sortedData.sort((a, b) => {
+            const valA = a[columnIndex];
+            const valB = b[columnIndex];
+            const numA = parseFloat(valA);
+            const numB = parseFloat(valB);
+            if (!isNaN(numA) && !isNaN(numB)) {
+                return direction === 'asc' ? numA - numB : numB - numA;
+            }
+            const strA = String(valA);
+            const strB = String(valB);
+            if (strA < strB) return direction === 'asc' ? -1 : 1;
+            if (strA > strB) return direction === 'asc' ? 1 : -1;
+            return 0;
+        });
+        return sortedData;
     }
 
-    private renderCellByType(cell: HTMLTableCellElement, data: any, columnDef: ColumnDefinition): void {
-        let content: string | HTMLElement = String(data); 
-        const dataString = String(data);
-        const type = columnDef.type; // Récupérer le type depuis columnDef
-
-        switch (type) {
-            case 'mail':
-                const linkMail = document.createElement('a');
-                linkMail.href = `mailto:${dataString}`;
-                linkMail.textContent = dataString;
-                linkMail.className = 'text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300';
-                content = linkMail;
-                break;
-            case 'tel':
-                 const linkTel = document.createElement('a');
-                 linkTel.href = `tel:${dataString.replace(/\s+/g, '')}`; // Enlève les espaces pour href
-                 linkTel.textContent = dataString;
-                 linkTel.className = 'text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300';
-                 content = linkTel;
-                break;
-            case 'money':
-                const amount = parseFloat(dataString);
-                if (!isNaN(amount)) {
-                    try {
-                        // Utiliser locale et currency de la définition de colonne, avec défauts
-                        const locale = columnDef.locale || 'fr-FR'; 
-                        const currency = columnDef.currency || 'EUR'; 
-                        content = new Intl.NumberFormat(locale, { style: 'currency', currency: currency }).format(amount);
-                    } catch (e) {
-                         console.error("Erreur de formatage monétaire:", e);
-                         content = dataString + " (Err)"; 
-                    }
-                } else {
-                    content = dataString + " (NaN)"; 
-                }
-                break;
-            case 'number':
-                 const num = parseFloat(dataString);
-                 if (!isNaN(num)) {
-                     // Utiliser locale de la définition de colonne, avec défaut
-                     const locale = columnDef.locale || 'fr-FR'; 
-                     content = new Intl.NumberFormat(locale).format(num);
-                 } else {
-                     content = dataString + " (NaN)";
-                 }
-                 break;
-            // case 'string' ou autres:
-            // Le défaut (String(data)) est déjà géré avant le switch
-            // ou on pourrait ajouter des formatages spécifiques si nécessaire
+    private handleSortClick(columnIndex: number): void {
+        const columnDef = this.options.columns[columnIndex];
+        if (!this.options.sorting?.enabled || !columnDef || columnDef.sortable === false) {
+             return; 
         }
+        let newDirection: SortDirection;
+        if (this.sortColumnIndex === columnIndex) {
+            newDirection = this.sortDirection === 'asc' ? 'desc' : 'asc';
+        } else {
+            newDirection = 'asc';
+        }
+        this.sortColumnIndex = columnIndex;
+        this.sortDirection = newDirection;
+        this.currentPage = 1; // Reset to page 1 on sort
 
-        this.appendRenderedContent(cell, content);
+        this.dispatchEvent('dt:sortChange', { 
+            sortColumnIndex: this.sortColumnIndex, 
+            sortDirection: this.sortDirection 
+        });
+
+        if (!this.isServerSide) {
+             this.render(); 
+        }
     }
 
     private getCurrentPageData(sourceData: any[][]): any[][] {
@@ -508,239 +572,189 @@ export class DataTable {
         return sourceData.slice(startIndex, endIndex);
     }
 
-    private handleSortClick(columnIndex: number): void {
-        // Vérification supplémentaire: ne rien faire si la colonne n'est pas triable
-        const columnDef = this.options.columns[columnIndex];
-        if (!this.options.sorting?.enabled || !columnDef || columnDef.sortable === false) {
-             console.warn(`Tentative de tri sur une colonne non triable (index: ${columnIndex})`);
-             return; 
-        }
+    // --- Cell Rendering Helpers --- 
 
-        // Déterminer le nouvel état de tri
-        let newDirection: SortDirection;
-        let newSortColumnIndex: number | null;
-        if (this.sortColumnIndex === columnIndex) {
-            newDirection = this.sortDirection === 'asc' ? 'desc' : 'asc';
-            newSortColumnIndex = columnIndex;
-        } else {
-            newDirection = 'asc';
-            newSortColumnIndex = columnIndex;
-        }
-
-        // Mettre à jour l'état (avant l'événement)
-        this.sortColumnIndex = newSortColumnIndex;
-        this.sortDirection = newDirection;
-        this.currentPage = 1; 
-
-        // Émettre l'événement AVANT de redessiner
-        this.dispatchEvent('dt:sortChange', { 
-            sortColumnIndex: this.sortColumnIndex, 
-            sortDirection: this.sortDirection 
+    private renderActionButtons(row: HTMLTableRowElement, rowData: any[]): HTMLTableCellElement | null {
+        const cell = row.insertCell();
+        cell.className = 'px-6 py-4 text-sm text-gray-800 border-b border-gray-200 text-right align-middle whitespace-nowrap'; // Adjusted classes
+        this.options.rowActions?.forEach((actionDef, index) => {
+            const button = document.createElement('button');
+            button.textContent = actionDef.label;
+            button.className = `text-indigo-600 hover:text-indigo-900 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 ${index > 0 ? 'ml-4' : ''} ${actionDef.className || ''}`;
+            button.type = 'button';
+            button.addEventListener('click', (event) => {
+                event.stopPropagation();
+                this.dispatchEvent('dt:actionClick', { 
+                    action: actionDef.actionId, 
+                    rowData: rowData 
+                });
+            });
+            cell.appendChild(button);
         });
-
-        this.render(); 
+        return cell; 
     }
 
-    private renderPaginationControls(): void {
-        const paginationContainer = document.createElement('div');
-        // Pagination un peu plus aérée
-        paginationContainer.className = 'bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6 mt-1'; // Ajout de mt-1 pour léger espace
-        // --- A11y: Rôle et label pour la navigation ---
-        paginationContainer.setAttribute('role', 'navigation');
-        paginationContainer.setAttribute('aria-label', 'Pagination');
-        // ---------------------------------------------
-
-        const totalPages = Math.ceil(this.totalRows / this.rowsPerPage);
-        const startItem = this.totalRows === 0 ? 0 : (this.currentPage - 1) * this.rowsPerPage + 1;
-        const endItem = Math.min(startItem + this.rowsPerPage - 1, this.totalRows);
-
-        // Utilisation de flex pour mieux organiser les éléments de pagination
-        const flexContainer = document.createElement('div');
-        flexContainer.className = 'flex-1 flex justify-between sm:hidden'; // Pour mobile
-        // ... (ajouter boutons mobile si nécessaire)
-
-        const hiddenOnMobileContainer = document.createElement('div');
-        hiddenOnMobileContainer.className = 'hidden sm:flex-1 sm:flex sm:items-center sm:justify-between'; // Pour écrans plus grands
-
-        const infoContainer = document.createElement('div');
-        infoContainer.className = 'text-sm text-gray-700';
-        const p = document.createElement('p'); // Mettre le texte dans un <p>
-        if (this.totalRows > 0) {
-            // Utiliser des span pour styler les nombres si on veut
-            p.innerHTML = `Affichage <span class="font-medium text-gray-900">${startItem}</span> à <span class="font-medium text-gray-900">${endItem}</span> sur <span class="font-medium text-gray-900">${this.totalRows}</span> résultats`;
+    private appendRenderedContent(cell: HTMLTableCellElement, content: any, isError: boolean = false): void {
+        // Clear previous content
+        while(cell.firstChild) { cell.removeChild(cell.firstChild); }
+        // Append new content
+        if (content instanceof HTMLElement || content instanceof DocumentFragment) {
+             cell.appendChild(content); 
+        } else if (typeof content === 'string') {
+             cell.innerHTML = content;
         } else {
-            p.textContent = 'Aucun résultat';
+            cell.textContent = String(content);
         }
-        infoContainer.appendChild(p);
-
-        const buttonContainer = document.createElement('div');
-        // Changé pour utiliser space-x pour l'espacement
-        buttonContainer.className = 'relative z-0 inline-flex rounded-md shadow-sm -space-x-px'; 
-
-        const prevButton = document.createElement('button');
-        prevButton.disabled = this.currentPage === 1;
-        // Style plus moderne, icône SVG possible plus tard
-        prevButton.className = 'relative inline-flex items-center px-3 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 focus:z-10 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition ease-in-out duration-150';
-        // --- A11y: Label et état désactivé ---
-        prevButton.setAttribute('aria-label', 'Page précédente');
-        if (prevButton.disabled) {
-            prevButton.setAttribute('aria-disabled', 'true');
+        if (isError) {
+            cell.classList.add('text-red-600');
         }
-        // ------------------------------------
-        prevButton.innerHTML = `<!-- Héroicon: chevron-left --> <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>`;
-        prevButton.addEventListener('click', () => {
-            if (this.currentPage > 1) {
-                this.currentPage--;
-                // Émettre l'événement AVANT de redessiner
-                this.dispatchPageChangeEvent();
-                this.render(); 
-            }
-        });
-
-        const nextButton = document.createElement('button');
-        nextButton.disabled = this.currentPage === totalPages || this.totalRows === 0;
-        // Style plus moderne, icône SVG possible plus tard
-        nextButton.className = 'relative inline-flex items-center px-3 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 focus:z-10 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition ease-in-out duration-150';
-        // --- A11y: Label et état désactivé ---
-        nextButton.setAttribute('aria-label', 'Page suivante');
-        if (nextButton.disabled) {
-            nextButton.setAttribute('aria-disabled', 'true');
-        }
-        // ------------------------------------
-        nextButton.innerHTML = `<!-- Héroicon: chevron-right --> <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" /></svg>`;
-        nextButton.addEventListener('click', () => {
-            const totalPages = Math.ceil(this.totalRows / this.rowsPerPage);
-            if (this.currentPage < totalPages) {
-                this.currentPage++;
-                 // Émettre l'événement AVANT de redessiner
-                this.dispatchPageChangeEvent();
-                this.render(); 
-            }
-        });
-
-        // Ajouter boutons au conteneur de boutons
-        buttonContainer.appendChild(prevButton);
-        // Ici on pourrait ajouter des numéros de page dans le futur
-        buttonContainer.appendChild(nextButton);
-
-        // Ajouter info et boutons au conteneur principal caché sur mobile
-        hiddenOnMobileContainer.appendChild(infoContainer);
-        hiddenOnMobileContainer.appendChild(buttonContainer);
-
-        // Ajouter les deux mises en page (mobile/desktop) au conteneur global de pagination
-        paginationContainer.appendChild(flexContainer); // Reste vide pour l'instant
-        paginationContainer.appendChild(hiddenOnMobileContainer);
-
-        this.element.appendChild(paginationContainer);
     }
 
-    // --- Méthodes Helper --- 
+    private renderCellByType(cell: HTMLTableCellElement, data: any, columnDef: ColumnDefinition): void {
+        let content: string | HTMLElement = String(data); 
+        const dataString = String(data);
+        const type = columnDef.type; 
 
-    // Helper pour émettre l'événement de changement de page
+        switch (type) {
+            case 'mail':
+                const linkMail = document.createElement('a');
+                linkMail.href = `mailto:${dataString}`;
+                linkMail.textContent = dataString;
+                linkMail.className = 'text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300';
+                content = linkMail;
+                break;
+            case 'tel':
+                 const linkTel = document.createElement('a');
+                 linkTel.href = `tel:${dataString.replace(/\s+/g, '')}`;
+                 linkTel.textContent = dataString;
+                 linkTel.className = 'text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300';
+                 content = linkTel;
+                break;
+            case 'money':
+                const amount = parseFloat(dataString);
+                if (!isNaN(amount)) {
+                    try {
+                        const locale = columnDef.locale || 'fr-FR'; 
+                        const currency = columnDef.currency || 'EUR'; 
+                        content = new Intl.NumberFormat(locale, { style: 'currency', currency: currency }).format(amount);
+                    } catch (e) {
+                         console.error("Erreur formatage monétaire:", e);
+                         content = dataString + " (Err)"; 
+                    }
+                } else {
+                    content = dataString + " (NaN)"; 
+                }
+                break;
+            case 'number':
+                 const num = parseFloat(dataString);
+                 if (!isNaN(num)) {
+                     const locale = columnDef.locale || 'fr-FR'; 
+                     content = new Intl.NumberFormat(locale).format(num);
+                 } else {
+                     content = dataString + " (NaN)";
+                 }
+                 break;
+        }
+        this.appendRenderedContent(cell, content);
+    }
+
+    // --- Event Helpers --- 
     private dispatchPageChangeEvent(): void {
          this.dispatchEvent('dt:pageChange', { 
             currentPage: this.currentPage,
             rowsPerPage: this.rowsPerPage,
-            totalRows: this.totalRows // Nombre total après filtrage
+            totalRows: this.totalRows
         });
     }
-
-    // Helper générique pour émettre des CustomEvents
     private dispatchEvent<T>(eventName: string, detail?: T): void {
         const event = new CustomEvent<T>(eventName, { 
             detail: detail,
-            bubbles: true, // Permet à l'événement de remonter le DOM
-            cancelable: true // Peut être annulé (moins pertinent ici)
+            bubbles: true,
+            cancelable: true
         });
         this.element.dispatchEvent(event);
     }
 
-    // --- API Publique ---
-
-    /**
-     * Remplace l'ensemble des données de la table et la redessine.
-     * @param newData Le nouveau tableau de données (any[][]).
-     */
+    // --- Public API Methods --- 
     public setData(newData: any[][]): void {
-        // Valider un minimum newData ? (est-ce un tableau?)
         if (!Array.isArray(newData)) {
             console.error("setData: Les nouvelles données doivent être un tableau.");
             return;
         }
-        // Copie profonde pour préserver l'immutabilité de l'entrée
         this.originalData = JSON.parse(JSON.stringify(newData));
-        // Réinitialiser l'état potentiellement affecté par les anciennes données
-        this.totalRows = this.originalData.length;
+        if (this.isServerSide) {
+             this.totalRows = this.options.serverSideTotalRows ?? this.originalData.length; // Use server total if provided
+        } else {
+             // totalRows will be recalculated in render based on filtered/sorted data
+        }
         this.currentPage = 1;
-        this.filterTerm = ''; // Optionnel: réinitialiser aussi le filtre/tri?
+        this.filterTerm = '';
         this.sortColumnIndex = null;
         this.sortDirection = 'none';
-        // Redessiner la table avec les nouvelles données
-        this.render();
+        this.render(); // Re-render with new data
         this.dispatchEvent('dt:dataChange', { source: 'setData' });
     }
-
-    /**
-     * Ajoute une nouvelle ligne de données à la fin de la table et la redessine.
-     * @param rowData Tableau représentant la ligne à ajouter.
-     */
     public addRow(rowData: any[]): void {
         if (!Array.isArray(rowData)) {
              console.error("addRow: La nouvelle ligne doit être un tableau.");
              return;
         }
-        // Copie profonde de la ligne ajoutée
+        // Note: In server mode, adding directly might desync. Prefer server-side add then setData.
         this.originalData.push(JSON.parse(JSON.stringify(rowData)));
-        this.totalRows = this.originalData.length;
-        // Optionnel : aller à la dernière page où la ligne a été ajoutée ?
-        // this.currentPage = Math.ceil(this.totalRows / this.rowsPerPage);
-        this.render();
-        this.dispatchEvent('dt:dataChange', { source: 'addRow', addedRow: rowData });
+        if (this.isServerSide) { 
+             console.warn("addRow appelé en mode serveur...");
+             if (this.options.serverSideTotalRows !== undefined) {
+                 this.options.serverSideTotalRows++;
+                 this.totalRows = this.options.serverSideTotalRows;
+             }
+             this.render(); // Re-render pagination etc.
+        } else {
+            // Client mode: render will recalculate totalRows and display
+            this.render(); 
+        }
+         this.dispatchEvent('dt:dataChange', { source: 'addRow', addedRow: rowData });
     }
-
-    /**
-     * Supprime une ligne basée sur la valeur d'une colonne identifiante (par défaut la première colonne, index 0).
-     * @param id La valeur identifiant la ligne à supprimer.
-     * @param idColumnIndex L'index de la colonne contenant l'identifiant (par défaut: 0).
-     * @returns true si une ligne a été supprimée, false sinon.
-     */
     public deleteRowById(id: any, idColumnIndex: number = 0): boolean {
         const initialLength = this.originalData.length;
         this.originalData = this.originalData.filter(row => row[idColumnIndex] !== id);
         const rowDeleted = this.originalData.length < initialLength;
-
         if (rowDeleted) {
-            this.totalRows = this.originalData.length;
-            // Ajuster la page courante si elle devient invalide
-            const totalPages = Math.max(1, Math.ceil(this.totalRows / this.rowsPerPage));
-            if (this.currentPage > totalPages) {
-                this.currentPage = totalPages;
+             // Note: In server mode, deleting directly might desync. Prefer server-side delete then setData.
+            if (this.isServerSide) { 
+                 console.warn("deleteRowById appelé en mode serveur...");
+                 if (this.options.serverSideTotalRows !== undefined) {
+                    this.options.serverSideTotalRows--;
+                    this.totalRows = this.options.serverSideTotalRows;
+                 }
+                 // Adjust page if necessary (server mode relies on external fetch)
+                 const totalPages = Math.max(1, Math.ceil(this.totalRows / this.rowsPerPage));
+                 if (this.currentPage > totalPages) {
+                     this.currentPage = totalPages;
+                 }
+                  this.render(); // Re-render pagination etc.
+            } else {
+                // Client mode: render will recalculate totalRows and display
+                this.render(); 
             }
-            this.render();
-            this.dispatchEvent('dt:dataChange', { source: 'deleteRowById', deletedId: id });
+             this.dispatchEvent('dt:dataChange', { source: 'deleteRowById', deletedId: id });
         } else {
             console.warn(`deleteRowById: Aucune ligne trouvée avec l'ID ${id} dans la colonne ${idColumnIndex}.`);
         }
         return rowDeleted;
     }
-
-    /**
-     * Met à jour une ligne existante basée sur la valeur d'une colonne identifiante.
-     * @param id La valeur identifiant la ligne à mettre à jour.
-     * @param newRowData Le nouveau tableau de données pour la ligne.
-     * @param idColumnIndex L'index de la colonne contenant l'identifiant (par défaut: 0).
-     * @returns true si une ligne a été mise à jour, false sinon.
-     */
     public updateRowById(id: any, newRowData: any[], idColumnIndex: number = 0): boolean {
          if (!Array.isArray(newRowData)) {
              console.error("updateRowById: Les nouvelles données de ligne doivent être un tableau.");
              return false;
          }
+         // Note: In server mode, updating directly might desync. Prefer server-side update then setData.
         const rowIndex = this.originalData.findIndex(row => row[idColumnIndex] === id);
-
         if (rowIndex !== -1) {
-            // Copie profonde des nouvelles données
             this.originalData[rowIndex] = JSON.parse(JSON.stringify(newRowData));
+            if (this.isServerSide) {
+                console.warn("updateRowById appelé en mode serveur...");
+            }
+            // Render will display the updated data (client or server)
             this.render();
             this.dispatchEvent('dt:dataChange', { source: 'updateRowById', updatedId: id, newRowData: newRowData });
             return true;
@@ -748,6 +762,134 @@ export class DataTable {
              console.warn(`updateRowById: Aucune ligne trouvée avec l'ID ${id} dans la colonne ${idColumnIndex}.`);
             return false;
         }
+    }
+
+    // --- Nouvelles Méthodes de Gestion de la Sélection ---
+
+    private handleSelectAllClick(isChecked: boolean): void {
+        // Obtenir TOUTES les données filtrées/triées (pertinentes pour la sélection globale)
+        const allRelevantData = this.getCurrentFilteredSortedData(); 
+
+        // Mettre à jour l'état interne pour TOUTES les lignes pertinentes
+        allRelevantData.forEach(rowData => {
+            const rowId = rowData[0]; // Assumer ID en colonne 0
+            if (isChecked) {
+                this.selectedRowIds.add(rowId);
+            } else {
+                this.selectedRowIds.delete(rowId);
+            }
+        });
+
+        // --- Mettre à jour l'UI directement --- 
+        const tbody = this.element.querySelector(`#${this.element.id}-tbody`);
+        if (tbody) {
+            const rows = tbody.querySelectorAll('tr[role="row"]');
+            // On suppose que les lignes visibles dans le DOM correspondent à visibleRowsData
+            // C'est le cas après un rendu normal. 
+            rows.forEach((rowElement) => {
+                const checkbox = rowElement.querySelector('input[type="checkbox"]') as HTMLInputElement | null;
+                // Pour retrouver l'ID, on pourrait le stocker en data-attribute, 
+                // mais pour 'select all', on applique juste l'état global 'isChecked'.
+                if (checkbox) {
+                    checkbox.checked = isChecked;
+                }
+                if (isChecked) {
+                    rowElement.classList.add('dt-row-selected', 'bg-indigo-50');
+                    rowElement.setAttribute('aria-selected', 'true');
+                } else {
+                    rowElement.classList.remove('dt-row-selected', 'bg-indigo-50');
+                    rowElement.setAttribute('aria-selected', 'false');
+                }
+            });
+        }
+        // ------------------------------------
+
+        this.updateSelectAllCheckboxState(); // Mettre à jour l'état de la checkbox "select all"
+        this.dispatchSelectionChangeEvent();
+    }
+
+    private handleRowCheckboxClick(rowId: any, rowData: any[], isChecked: boolean, rowElement: HTMLTableRowElement): void {
+        if (isChecked) {
+            if (this.selectionMode === 'single') {
+                this.selectedRowIds.clear(); // Désélectionner les autres en mode single
+            }
+            this.selectedRowIds.add(rowId);
+            rowElement.classList.add('dt-row-selected', 'bg-indigo-50');
+            rowElement.setAttribute('aria-selected', 'true');
+        } else {
+            this.selectedRowIds.delete(rowId);
+            rowElement.classList.remove('dt-row-selected', 'bg-indigo-50');
+            rowElement.setAttribute('aria-selected', 'false');
+        }
+
+        this.updateSelectAllCheckboxState(); // Mettre à jour l'état de la checkbox "select all"
+        this.dispatchSelectionChangeEvent();
+    }
+
+    // Met à jour l'état checked/indeterminate de la checkbox "select all"
+    private updateSelectAllCheckboxState(): void {
+        if (!this.selectAllCheckbox || this.selectionMode === 'single') return;
+
+        // Baser l'état sur TOUTES les données filtrées/triées
+        const allRelevantData = this.getCurrentFilteredSortedData();
+
+        if (allRelevantData.length === 0) {
+            this.selectAllCheckbox.checked = false;
+            this.selectAllCheckbox.indeterminate = false;
+            return;
+        }
+
+        let allVisibleSelected = true; // Renommé conceptuellement mais garde le nom pour moins de diff
+        let someVisibleSelected = false; // Idem
+
+        // Vérifier l'état de sélection sur toutes les données pertinentes
+        for (const rowData of allRelevantData) { 
+            const rowId = rowData[0]; // Assumer ID en colonne 0
+            if (this.selectedRowIds.has(rowId)) {
+                someVisibleSelected = true;
+            } else {
+                allVisibleSelected = false;
+            }
+        }
+
+        if (allVisibleSelected) {
+            this.selectAllCheckbox.checked = true;
+            this.selectAllCheckbox.indeterminate = false;
+        } else if (someVisibleSelected) {
+            this.selectAllCheckbox.checked = false;
+            this.selectAllCheckbox.indeterminate = true;
+        } else {
+            this.selectAllCheckbox.checked = false;
+            this.selectAllCheckbox.indeterminate = false;
+        }
+    }
+
+    // Récupère les données filtrées/triées courantes (client-side)
+    private getCurrentFilteredSortedData(): any[][] {
+         if (this.isServerSide) {
+             // En mode serveur, on ne peut pas connaître toutes les données filtrées/triées
+             // 'Select All' devrait peut-être sélectionner uniquement la page visible
+              return [...this.originalData]; // Retourne juste la page actuelle
+         }
+         const filteredData = this.getFilteredData([...this.originalData]); 
+         const sortedData = this.sortDataIfEnabled(filteredData);   
+         return sortedData;
+    }
+
+    // Récupère les données complètes des lignes sélectionnées
+    public getSelectedRowData(): any[][] {
+        // En mode serveur, il faut idéalement avoir TOUTES les données originales
+        // ou alors renvoyer seulement les IDs et laisser l'app gérer.
+        // On va filtrer originalData, qui contient la page actuelle en mode serveur.
+        // Si on veut les données complètes, il faudrait une autre approche.
+        const allData = this.isServerSide ? [...this.originalData] : this.getCurrentFilteredSortedData();
+        
+        return allData.filter(rowData => this.selectedRowIds.has(rowData[0]));
+    }
+
+    // Dispatch l'événement de changement de sélection
+    private dispatchSelectionChangeEvent(): void {
+        this.dispatchEvent('dt:selectionChange', { selectedData: this.getSelectedRowData() });
     }
 }
 

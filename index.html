@@ -3,12 +3,22 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Test Simple DataTable (Tailwind)</title>
+    <title>Exemple DataTable</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Style pour les lignes sélectionnées (utilisé par la classe dt-row-selected) */
+        .dt-row-selected {
+            /* Tailwind applique déjà bg-indigo-50, ceci est un exemple alternatif ou complémentaire */
+            /* background-color: #eef2ff; */ 
+        }
+        .dt-row-selected:hover {
+            /* background-color: #e0e7ff; */ /* Exemple pour hover */
+        }
+    </style>
 </head>
 <body>
 
-    <h1 class="text-2xl font-bold mb-4 text-gray-900">Test du Simple DataTable</h1>
+    <h1 class="text-2xl font-bold mb-4 text-gray-900">Test du Simple DataTable (Sélection)</h1>
 
     <div id="myTableContainer"></div>
 
@@ -17,83 +27,84 @@
     <!-- Initialiser la DataTable -->
     <script>
         let myDataTableInstance = null; // Rendre l'instance accessible
+        const dt = null; // Déclarer dt en dehors pour l'utiliser dans le listener delete
 
         document.addEventListener('DOMContentLoaded', () => {
             console.log('DOM chargé, tentative d\'initialisation de DataTable...');
-            // Données de test
-            const testData = [
-                [1, 'Alice Fournier', 'alice.fournier@email.com', 'Développeuse', 'Paris', 30, 52000, 52000, 52000, '01 23 45 67 89'],
-                [2, 'Bob Martin', 'bob.martin@email.com', 'Designer', 'Lyon', 25, 48000, 48000, 48000, '02 34 56 78 90'],
-                [3, 'Charlie Dupont', 'charlie.dupont@email.com', 'Chef de projet', 'Marseille', 35, 65000, 65000, 65000, '03 45 67 89 01'],
-                [4, 'David Petit', 'david.petit@email.com', 'Testeur', 'Lille', 28, 42000, 42000, 42000, '04 56 78 90 12'],
-                [5, 'Eve Dubois', 'eve.dubois@email.com', 'Développeuse', 'Bordeaux', 32, 55000, 55000, 55000, '05 67 89 01 23'],
-                [6, 'Frank Moreau', 'frank.moreau@email.com', 'Designer', 'Nantes', 29, 49500, 49500, 49500, '06 78 90 12 34'],
-                [7, 'Grace Leroy', 'grace.leroy@email.com', 'Chef de projet', 'Strasbourg', 40, 70000, 70000, 70000, '07 89 01 23 45'],
-                [8, 'Heidi Simon', 'heidi.simon@email.com', 'Testeur', 'Toulouse', 22, 38000, 38000, 38000, '08 90 12 34 56'],
-                [9, 'Ivan Roux', 'ivan.roux@email.com', 'Développeur', 'Nice', 27, 51000, 51000, 51000, '09 01 23 45 67'],
-                [10, 'Judy Michel', 'judy.michel@email.com', 'Designer', 'Rennes', 31, 53000, 53000, 53000, '01 12 34 56 78'],
-                [11, 'Kevin Blanc', 'kevin.blanc@email.com', 'Chef de projet', 'Reims', 45, 75000, 75000, 75000, '02 23 45 67 89'],
-                [12, 'Laura Girard', 'laura.girard@email.com', 'Testeur', 'Le Havre', 26, 41000, 41000, 41000, '03 34 56 78 90']
+            // Sample Data (12 rows)
+            const baseSampleData = [
+                [1, 'Alice Fournier', 'alice.fournier@email.com', 'Développeuse', 'Paris', 30, 52000, '01 23 45 67 89'],
+                [2, 'Bob Martin', 'bob.martin@email.com', 'Designer', 'Lyon', 25, 48000, '02 34 56 78 90'],
+                [3, 'Charlie Dupont', 'charlie.dupont@email.com', 'Chef de projet', 'Marseille', 35, 65000, '03 45 67 89 01'],
+                [4, 'David Petit', 'david.petit@email.com', 'Testeur', 'Lille', 28, 42000, '04 56 78 90 12'],
+                [5, 'Eve Dubois', 'eve.dubois@email.com', 'Développeuse', 'Bordeaux', 32, 55000, '05 67 89 01 23'],
+                [6, 'Frank Moreau', 'frank.moreau@email.com', 'Designer', 'Nantes', 29, 49500, '06 78 90 12 34'],
+                [7, 'Grace Leroy', 'grace.leroy@email.com', 'Chef de projet', 'Strasbourg', 40, 70000, '07 89 01 23 45'],
+                [8, 'Heidi Simon', 'heidi.simon@email.com', 'Testeur', 'Toulouse', 22, 38000, '08 90 12 34 56'],
+                [9, 'Ivan Roux', 'ivan.roux@email.com', 'Développeur', 'Nice', 27, 51000, '09 01 23 45 67'],
+                [10, 'Judy Michel', 'judy.michel@email.com', 'Designer', 'Rennes', 31, 53000, '01 12 34 56 78'],
+                [11, 'Kevin Durand', 'kevin.durand@email.com', 'Commercial', 'Strasbourg', 29, 47000, '03 88 99 00 11'],
+                [12, 'Laura Moreau', 'laura.moreau@email.com', 'Chef de projet', 'Rennes', 33, 68000, '02 11 22 33 44']
             ];
+
+            // --- Augmenter la quantité de données pour tester le Virtual Scroll ---
+            let sampleData = [];
+            let currentId = 1;
+            for (let i = 0; i < 8; i++) { // Répéter les données 8 fois (12*8 = 96 lignes) + les 12 initiales = 108
+                baseSampleData.forEach(row => {
+                    const newRow = [...row]; // Copier la ligne
+                    newRow[0] = currentId++; // Mettre à jour l'ID
+                    sampleData.push(newRow);
+                });
+            }
+            // Ajouter les données initiales aussi si nécessaire (ou juste utiliser les répétées)
+             sampleData = baseSampleData.concat(sampleData); // Ajoute les 12 premières
+             // Re-numéroter tous les IDs pour être sûr
+             sampleData.forEach((row, index) => { row[0] = index + 1; });
+             console.log(`Generated ${sampleData.length} rows for testing.`);
+            // -----------------------------------------------------------------
+
             // Noms des colonnes avec les types et renderers
-            const testColumns = [
-                { title: 'ID', type: 'number', locale: 'en-US', sortable: true, searchable: false },
-                { title: 'Nom' },
-                { title: 'Email', type: 'mail' },
-                { title: 'Poste', sortable: false },
-                { title: 'Ville' },
-                {
-                    title: 'Âge',
-                    type: 'number',
-                    render: (age, row) => {
-                        const element = document.createElement('span');
-                        element.textContent = `${age} ans`;
-                        if (age >= 30) {
-                            element.classList.add('font-bold', 'text-red-700', 'dark:text-red-500');
-                        }
-                        return element;
-                    }
+            const columnsDefinition = [
+                { title: 'ID', type: 'number', sortable: true, width: '80px' },     // Largeur fixe pour ID
+                { title: 'NOM', sortable: true, searchable: true, width: '100px' },   // 20% de la largeur
+                { title: 'EMAIL', type: 'mail', sortable: true, searchable: true, width: '100px' }, // 25% de la largeur
+                { title: 'POSTE', searchable: true }, // Largeur automatique
+                { title: 'VILLE', sortable: true, searchable: true, width: '100px' }, // Largeur automatique
+                { title: 'ÂGE', type: 'number', sortable: true, searchable: true, 
+                  render: (age) => `<span class="${parseInt(String(age)) > 30 ? 'text-red-600 font-semibold' : ''}">${age} ans</span>`, width: '100px' 
                 },
-                {
-                    title: 'Salaire (USD)',
-                    type: 'money',
-                    locale: 'en-US',
-                    currency: 'USD'
-                },
-                {
-                    title: 'Salaire (EUR)',
-                    type: 'money',
-                    locale: 'fr-FR',
-                    currency: 'EUR'
-                },
-                {
-                    title: 'Salaire (JPY)',
-                    type: 'money',
-                    locale: 'ja-JP',
-                    currency: 'JPY'
-                },
-                {
-                    title: 'Téléphone',
-                    type: 'tel',
-                    sortable: false,
-                    searchable: false
-                }
+                { title: 'SALAIRE (EUR)', type: 'money', currency: 'EUR', sortable: true, searchable: false, locale:'fr-FR' }, // Largeur auto
+                { title: 'TÉLÉPHONE', type: 'tel', searchable: true }, // Largeur auto
+                 // Pas de définition pour la colonne Actions ici, sa largeur sera automatique ou via CSS
             ];
 
             if (typeof window.SimpleDataTable !== 'undefined') {
                 try {
                     // Stocker l'instance lors de la création
                     myDataTableInstance = new window.SimpleDataTable('myTableContainer', {
-                        columns: testColumns,
-                        data: testData,
-                        pagination: { enabled: true, rowsPerPage: 5 },
-                        sorting: { enabled: true },
-                        searching: { enabled: true, debounceTime: 300 },
+                        columns: columnsDefinition,
+                        data: sampleData,
+                        // Réactiver la pagination
+                        pagination: { enabled: true, rowsPerPage: 10 }, 
+                        sorting: { enabled: true }, // Tri reste fonctionnel
+                        searching: { enabled: true, debounceTime: 300 }, // Recherche reste fonctionnelle
+                        // --- Activer la sélection ---
+                        selection: { enabled: true }, // Mode multiple par défaut
+                        // --------------------------
                         rowActions: [
                             { label: 'Voir', actionId: 'view', className: 'text-blue-600 hover:text-blue-900' },
                             { label: 'Modifier', actionId: 'edit' },
                             { label: 'Supprimer', actionId: 'delete', className: 'text-red-600 hover:text-red-900' }
-                        ]
+                        ],
+                        // --- Activer Virtual Scroll ---
+                        virtualScroll: {
+                            enabled: true,
+                            rowHeight: 48, // Hauteur estimée de vos lignes en pixels (IMPORTANT: à ajuster!)
+                            buffer: 5      // Nombre de lignes rendues en plus au-dessus/en dessous
+                        },
+                        // processingMode: 'client' // Mode client est le défaut et nécessaire pour VS
+                        // -------------------------------
                     });
                     console.log('DataTable initialisée avec succès !');
 
@@ -150,7 +161,8 @@
                                     if (confirm(`Voulez-vous vraiment supprimer la ligne pour ${rowData[1]} (ID: ${rowData[0]}) ?`)) {
                                         // Appel de la nouvelle méthode publique deleteRowById sur l'instance dt
                                         // Assurez-vous que 'dt' est bien votre variable contenant l'instance DataTable
-                                        const deleted = dt.deleteRowById(rowData[0]); // Utilise l'ID de la première colonne (index 0)
+                                        // Utiliser myDataTableInstance car dt n'est pas assigné globalement
+                                        const deleted = myDataTableInstance.deleteRowById(rowData[0]); // Utilise l'ID de la première colonne (index 0)
                                         
                                         if (deleted) {
                                             console.log(`Ligne ID ${rowData[0]} supprimée avec succès via API.`);
@@ -169,6 +181,16 @@
                             }
                         });
                         console.log('Écouteurs d\'événements DataTable ajoutés.');
+
+                        // --- Écouteur pour la sélection ---
+                        tableContainer.addEventListener('dt:selectionChange', (event) => {
+                            const selectedData = event.detail.selectedData;
+                            console.log('%cÉvénement dt:selectionChange reçu:', 'color: blue; font-weight: bold;', selectedData);
+                            // Exemple: Mettre à jour une UI pour montrer le nombre d'éléments sélectionnés
+                            // const countElement = document.getElementById('selected-count');
+                            // if(countElement) countElement.textContent = selectedData.length;
+                        });
+                        // ---------------------------------
                     }
                     // --- Fin Ajout des écouteurs --- 
 
