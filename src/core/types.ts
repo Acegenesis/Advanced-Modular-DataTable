@@ -17,10 +17,10 @@ export interface ColumnDefinition {
     locale?: string;
     currency?: string;
     width?: string;
-    filterType?: 'text' | 'select' | 'number' | 'date';
-    filterOptions?: string[] | { value: any; label: string }[];
+    filterType?: 'text' | 'number' | 'date' | 'multi-select';
+    filterOptions?: (string | { value: any; label: string })[];
     filterPlaceholder?: string;
-    filterOperators?: TextFilterOperator[] | NumberFilterOperator[] | DateFilterOperator[];
+    filterOperators?: TextFilterOperator[] | NumberFilterOperator[] | DateFilterOperator[] | MultiSelectFilterOperator[];
 }
 
 // Interface pour les actions
@@ -115,12 +115,15 @@ export type DateFilterOperator =
     'isEmpty' | 
     'isNotEmpty';
 
+// Nouvel opérateur pour les filtres multi-sélection
+export type MultiSelectFilterOperator = 'in';
+
 // État d'un filtre de colonne individuel
 export type ColumnFilterState = {
-    // La valeur peut être une chaîne, un nombre, ou un objet pour les plages
-    value: string | number | { from: number | string | Date, to: number | string | Date } | null;
+    // La valeur peut être une chaîne, un nombre, un objet pour les plages, OU un tableau pour multi-select
+    value: string | number | { from: number | string | Date, to: number | string | Date } | (string | number)[] | null;
     // L'opérateur peut être l'un des types définis
-    operator?: TextFilterOperator | NumberFilterOperator | DateFilterOperator;
+    operator?: TextFilterOperator | NumberFilterOperator | DateFilterOperator | MultiSelectFilterOperator;
 } | null;
 
 export type SortDirection = 'asc' | 'desc' | 'none';

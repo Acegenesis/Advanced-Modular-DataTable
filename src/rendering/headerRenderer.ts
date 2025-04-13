@@ -1,7 +1,7 @@
 import { DataTable } from "../core/DataTable";
 import { handleSortClick } from "../features/sorting";
 import { handleSelectAllClick, updateSelectAllCheckboxState } from "../features/selection";
-import { ColumnDefinition, ColumnFilterState, TextFilterOperator, NumberFilterOperator, DateFilterOperator } from "../core/types";
+import { ColumnDefinition, ColumnFilterState, TextFilterOperator, NumberFilterOperator, DateFilterOperator, MultiSelectFilterOperator } from "../core/types";
 
 // Helper type pour accéder aux propriétés de l'objet ColumnFilterState non-null
 type FilterStateObject = Exclude<ColumnFilterState, null>;
@@ -397,6 +397,136 @@ function createAdvancedDateFilterPopup(instance: DataTable, columnIndex: number,
     setTimeout(() => { document.addEventListener('click', handleOutsideClick, true); }, 0);
 }
 
+// --- Nouvelle fonction pour les filtres Multi-Select (Checkbox) ---
+/**
+ * Crée et affiche la popup de filtre multi-sélection avec checkboxes.
+ */
+function createMultiSelectFilterPopup(instance: DataTable, columnIndex: number, columnDef: ColumnDefinition, currentFilterState: ColumnFilterState | undefined, buttonElement: HTMLElement) {
+    closeActivePopup();
+
+    const popup = document.createElement('div');
+    activePopup = popup;
+    popup.className = 'absolute z-20 mt-1 w-72 bg-white border border-gray-300 rounded-md shadow-lg p-3 space-y-3 flex flex-col'; // flex-col pour structure
+    popup.addEventListener('click', (e) => e.stopPropagation());
+
+    // --- Options (fournies ou auto-générées) ---
+    let options: { value: string; label: string }[] = [];
+    const state = instance.stateManager;
+    if (columnDef.filterOptions) {
+        options = columnDef.filterOptions.map(opt => typeof opt === 'string' ? { value: opt, label: opt } : { value: String(opt.value), label: opt.label });
+    } else {
+        const originalData = state.getOriginalData();
+        if (originalData) {
+            const uniqueValues = new Set<string>();
+            originalData.forEach(row => {
+                const cellValue = row[columnIndex];
+                if (cellValue !== null && cellValue !== undefined && String(cellValue).trim() !== '') {
+                    uniqueValues.add(String(cellValue));
+                }
+            });
+            options = Array.from(uniqueValues).sort((a, b) => a.localeCompare(b)).map(val => ({ value: val, label: val }));
+        } else {
+             console.warn(`Impossible de générer les options pour le filtre multi-select de la colonne ${columnIndex}.`);
+        }
+    }
+
+    // Valeurs actuellement sélectionnées (si le filtre existe et est de type 'in')
+    const currentSelectedValues = new Set<string>(
+        (currentFilterState?.operator === 'in' && Array.isArray(currentFilterState.value)) 
+        ? currentFilterState.value.map(String) 
+        : []
+    );
+
+    // --- Champ de recherche pour filtrer les options ---
+    const searchInput = document.createElement('input');
+    searchInput.type = 'text';
+    searchInput.placeholder = 'Rechercher options...';
+    searchInput.className = 'w-full px-2 py-1 border border-gray-300 rounded-md shadow-sm text-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 mb-2';
+    popup.appendChild(searchInput);
+
+    // --- Conteneur scrollable pour les checkboxes ---
+    const optionsContainer = document.createElement('div');
+    optionsContainer.className = 'max-h-60 overflow-y-auto border border-gray-200 rounded-md p-2 space-y-1'; // Hauteur max + scroll
+    popup.appendChild(optionsContainer);
+
+    // Fonction pour afficher/filtrer les options
+    const renderOptions = (filterText: string = '') => {
+        optionsContainer.innerHTML = ''; // Vider le conteneur
+        const filterLower = filterText.trim().toLowerCase();
+        
+        options.forEach(opt => {
+            if (opt.label.toLowerCase().includes(filterLower)) {
+                const labelElement = document.createElement('label');
+                labelElement.className = 'flex items-center space-x-2 text-sm cursor-pointer px-1 py-0.5 rounded hover:bg-gray-100';
+                
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.value = opt.value;
+                checkbox.className = 'form-checkbox h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500';
+                checkbox.checked = currentSelectedValues.has(opt.value);
+
+                const textSpan = document.createElement('span');
+                textSpan.textContent = opt.label;
+
+                labelElement.appendChild(checkbox);
+                labelElement.appendChild(textSpan);
+                optionsContainer.appendChild(labelElement);
+            }
+        });
+    };
+
+    // Affichage initial
+    renderOptions();
+
+    // Écouteur pour la recherche
+    searchInput.addEventListener('input', (e) => {
+        renderOptions((e.target as HTMLInputElement).value);
+    });
+
+    // --- Boutons d'action ---
+    const buttonContainer = document.createElement('div');
+    buttonContainer.className = 'flex justify-end space-x-2 pt-2 mt-auto'; // mt-auto pour pousser en bas
+
+    const clearButton = document.createElement('button');
+    clearButton.type = 'button';
+    clearButton.textContent = 'Effacer';
+    clearButton.className = 'px-3 py-1 border border-gray-300 rounded-md text-sm text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-1 focus:ring-indigo-500';
+    clearButton.addEventListener('click', () => {
+        instance.setColumnFilter(columnIndex, null);
+        closeActivePopup();
+    });
+
+    const applyButton = document.createElement('button');
+    applyButton.type = 'button';
+    applyButton.textContent = 'Appliquer';
+    applyButton.className = 'px-3 py-1 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500';
+    applyButton.addEventListener('click', () => {
+        const selectedValues: string[] = [];
+        optionsContainer.querySelectorAll('input[type="checkbox"]:checked').forEach(cb => {
+            selectedValues.push((cb as HTMLInputElement).value);
+        });
+
+        if (selectedValues.length > 0) {
+            instance.setColumnFilter(columnIndex, { value: selectedValues, operator: 'in' });
+        } else {
+            // Si rien n'est coché, effacer le filtre
+            instance.setColumnFilter(columnIndex, null);
+        }
+        closeActivePopup();
+    });
+
+    buttonContainer.appendChild(clearButton);
+    buttonContainer.appendChild(applyButton);
+    popup.appendChild(buttonContainer);
+
+    // --- Positionnement et ajout au body ---
+    const rect = buttonElement.getBoundingClientRect();
+    popup.style.left = `${rect.left + window.scrollX}px`;
+    popup.style.top = `${rect.bottom + window.scrollY + 2}px`;
+    document.body.appendChild(popup);
+    searchInput.focus(); // Focus sur le champ de recherche
+    setTimeout(() => { document.addEventListener('click', handleOutsideClick, true); }, 0);
+}
 
 // --- Header Rendering Logic ---
 
@@ -460,6 +590,7 @@ export function renderHeader(instance: DataTable, table: HTMLTableElement): void
         const sortFilterContainer = document.createElement('div');
         sortFilterContainer.className = 'flex items-center space-x-1';
 
+        // --- Sorting UI --- 
         const isSortable = instance.options.sorting?.enabled && columnDef.sortable !== false;
         if (isSortable) {
             th.classList.add('cursor-pointer', 'hover:bg-gray-100', 'transition-colors', 'duration-150');
@@ -495,20 +626,29 @@ export function renderHeader(instance: DataTable, table: HTMLTableElement): void
             sortFilterContainer.appendChild(sortIndicatorSpan);
         }
 
+        // --- Filtering UI --- 
         const isGloballyFilterable = instance.options.columnFiltering?.enabled;
         const filterType = columnDef.filterType;
-        if (isGloballyFilterable && filterType && filterType !== 'select') {
+
+        // Vérifier si le filtrage est activé et si le type est géré pour une popup
+        if (isGloballyFilterable && filterType && (filterType === 'text' || filterType === 'number' || filterType === 'date' || filterType === 'multi-select')) {
+            const state = instance.stateManager;
             const currentFilter = state.getColumnFilters().get(index);
             const filterControlContainer = document.createElement('div');
-            filterControlContainer.className = 'dt-filter-control';
+            filterControlContainer.className = 'dt-filter-control ml-1'; // Ajout de ml-1 pour espacer du tri
+            
+            // Créer le bouton "entonnoir" pour tous ces types
             const filterButton = document.createElement('button');
             filterButton.type = 'button';
             filterButton.className = 'p-1 text-gray-400 hover:text-gray-600 focus:outline-none focus:ring-1 focus:ring-indigo-500 rounded';
+            // Mettre à jour l'icône en fonction de si un filtre est actif
             filterButton.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="${currentFilter ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="${currentFilter ? 0 : 1.5}"><path fill-rule="evenodd" d="M3 3a1 1 0 011-1h12a1 1 0 011 1v3a1 1 0 01-.293.707L13 10.414V17a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6.586L3.293 6.707A1 1 0 013 6V3z" clip-rule="evenodd" /></svg>`;
             filterButton.setAttribute('aria-label', `Options de filtre pour ${columnDef.title}`);
             filterButton.setAttribute('aria-haspopup', 'true');
+
             filterButton.addEventListener('click', (e) => {
                 e.stopPropagation();
+                // Le switch est correct et appelle la bonne fonction
                 switch (filterType) {
                     case 'text':
                         createAdvancedTextFilterPopup(instance, index, columnDef, currentFilter, filterButton);
@@ -519,15 +659,21 @@ export function renderHeader(instance: DataTable, table: HTMLTableElement): void
                     case 'date':
                         createAdvancedDateFilterPopup(instance, index, columnDef, currentFilter, filterButton);
                         break;
-                    default:
-                         console.warn(`Type de filtre non supporté pour la popup: ${filterType}`);
+                    case 'multi-select':
+                         createMultiSelectFilterPopup(instance, index, columnDef, currentFilter, filterButton);
+                         break;
+                    // default: // Pas nécessaire si la condition if externe est correcte
+                    //      console.warn(`Type de filtre non supporté pour la popup: ${filterType}`);
                 }
             });
             filterControlContainer.appendChild(filterButton);
-            sortFilterContainer.appendChild(filterControlContainer);
+            sortFilterContainer.appendChild(filterControlContainer); // Ajouter au conteneur droite
         }
 
-        cellContentContainer.appendChild(sortFilterContainer);
+        // Ajouter le conteneur droite (Tri + Filtre) s'il contient quelque chose
+        if (sortFilterContainer.hasChildNodes()) {
+            cellContentContainer.appendChild(sortFilterContainer);
+        }
         th.appendChild(cellContentContainer);
         headerRow.appendChild(th);
     });

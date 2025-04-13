@@ -1,6 +1,6 @@
 import { DataTable } from "../core/DataTable";
 import { dispatchEvent, dispatchSearchEvent, dispatchFilterChangeEvent } from "../events/dispatcher";
-import { ColumnFilterState, TextFilterOperator, NumberFilterOperator, DateFilterOperator } from "../core/types";
+import { ColumnFilterState, TextFilterOperator, NumberFilterOperator, DateFilterOperator, MultiSelectFilterOperator } from "../core/types";
 
 // --- Global Search Feature ---
 
@@ -92,7 +92,7 @@ export function applyFilters(instance: DataTable, data: any[][]): any[][] {
                 const cellData = row[columnIndex];
                 const columnDef = instance.options.columns[columnIndex];
                 const filterValue = filterState.value;
-                const filterOperator = filterState.operator as TextFilterOperator | NumberFilterOperator | DateFilterOperator;
+                const filterOperator = filterState.operator as TextFilterOperator | NumberFilterOperator | DateFilterOperator | MultiSelectFilterOperator;
                 let match = false;
 
                 switch (columnDef.filterType) {
@@ -194,13 +194,21 @@ export function applyFilters(instance: DataTable, data: any[][]): any[][] {
                         }
                         break;
 
-                    case 'select':
-                        const cellDataString = String(cellData).trim().toLowerCase();
-                        const selectValueString = String(filterValue).toLowerCase();
-                        match = cellDataString === selectValueString;
+                    case 'multi-select':
+                        const multiSelectOp = filterOperator as MultiSelectFilterOperator;
+                        if (multiSelectOp === 'in' && Array.isArray(filterValue)) {
+                            const cellValueString = String(cellData);
+                            const selectedValuesSet = new Set<string>(filterValue.map(String));
+                            match = selectedValuesSet.has(cellValueString);
+                        } else {
+                            match = false;
+                        }
                         break;
+
                     default:
-                        match = true;
+                        // Retrait de la vérification d'exhaustivité car filterType peut être undefined
+                        // const _exhaustiveCheck: never = columnDef.filterType;
+                        match = true; // Ignorer les types inconnus/undefined
                         break;
                 }
 
