@@ -54,9 +54,9 @@
             [10, 'Vincent', 'Emma', 'emma.vincent@place.org', '01 02 03 04 05', 64000]
         ];
 
-        // Définition des colonnes
+        // Colonnes pour la première table
         const columns = [
-            { title: 'ID', type: 'number', sortable: true, width: '80px' },
+            { title: 'ID', type: 'number', sortable: true, width: '80px' }, // Non redimensionnable par défaut
             { 
                 title: 'Nom', 
                 type: 'string', 
@@ -64,16 +64,24 @@
                 searchable: true, 
                 filterType: 'text',
                 filterPlaceholder: 'Filtrer Nom...',
-                filterOperators: ['contains', 'notContains', 'startsWith', 'equals', 'isEmpty', 'isNotEmpty']
+                filterOperators: ['contains', 'notContains', 'startsWith', 'equals', 'isEmpty', 'isNotEmpty'],
+                resizable: true
             },
             {
                 title: 'Prénom',
                 type: 'string',
                 searchable: true,
                 filterType: 'multi-select'
+                // resizable: false // Exemple pour désactiver explicitement
             },
-            { title: 'Email', type: 'mail', searchable: true, width: '200px' },
-            { title: 'Téléphone', type: 'tel', searchable: false, width: '150px' },
+            { 
+                title: 'Email', 
+                type: 'mail', 
+                searchable: true, 
+                width: '200px',
+                resizable: true // Activation du redimensionnement
+            },
+            { title: 'Téléphone', type: 'tel', searchable: false, width: '180px' },
             { 
                 title: 'Salaire', 
                 type: 'money', 
@@ -82,87 +90,71 @@
                 currency: 'EUR', 
                 width: '150px',
                 filterType: 'number',
-                filterOperators: ['equals', 'notEquals', 'greaterThan', 'lessThan', 'greaterThanOrEqual', 'lessThanOrEqual', 'between', 'isEmpty', 'isNotEmpty']
+                filterOperators: ['equals', 'notEquals', 'greaterThan', 'lessThan', 'greaterThanOrEqual', 'lessThanOrEqual', 'between', 'isEmpty', 'isNotEmpty'],
+                resizable: true // Activation du redimensionnement
             }
         ];
 
-        // Options du DataTable
+        // Options pour la première table
         const options = {
             columns: columns,
             data: data,
-            columnFiltering: { // <-- Activer les filtres de colonne
-                enabled: true,
-                showClearButton: true // <-- Afficher le bouton
-            },
             pagination: {
                 enabled: true,
-                rowsPerPage: 5, // Afficher 5 lignes par page
-                style: 'numbered', // Options: 'simple', 'numbered', 'numbered-jump'
-                previousButtonContent: '&larr; Préc.', // Personnalisation bouton Précédent
-                nextButtonContent: 'Suiv. &rarr;',     // Personnalisation bouton Suivant
-                jumpButtonText: 'OK'             // Personnalisation bouton Go
+                rowsPerPage: 5,
+                style: 'numbered-jump'
             },
-            sorting: {
-                enabled: true
+            sorting: { enabled: true },
+            searching: { enabled: true },
+            selection: { enabled: true, mode: 'multiple' },
+            exporting: {
+                csv: { enabled: true, filename: 'export_utilisateurs' }
             },
-            searching: {
+            columnFiltering: { 
                 enabled: true,
-                debounceTime: 350 // Délai avant recherche
+                showClearButton: true 
             },
-            exporting: { // <-- Configurer l'export
-                csv: {
-                    enabled: true,
-                    delimiter: ';', // Utiliser le point-virgule
-                    encoding: 'utf-8', // Garder UTF-8
-                    bom: false, // Ne pas ajouter de BOM
-                    filename: 'mes_donnees.csv' // Nom de fichier personnalisé
-                }
-            },
-            selection: {
-                enabled: true, // Activer la sélection
-                mode: 'multiple' // 'single' ou 'multiple'
-                // initialSelectedIds: [3, 5] // Optionnel: Lignes initialement sélectionnées
-            },
-            rowActions: [ // Ajouter des actions
-                { label: 'Voir', actionId: 'view', className: 'text-blue-600 hover:text-blue-800' },
-                { label: 'Modifier', actionId: 'edit' },
-                { label: 'Supprimer', actionId: 'delete', className: 'text-red-600 hover:text-red-800' }
+            rowActions: [
+                { label: 'Voir', actionId: 'view' },
+                { label: 'Modifier', actionId: 'edit', className: 'text-blue-500' },
+                { label: 'Supprimer', actionId: 'delete', className: 'text-red-500' }
             ],
-            loadingMessage: 'Veuillez patienter, chargement des données...' // <-- Message de chargement personnalisé
+            // Activation de la persistance de l'état
+            stateManagement: { persist: true } 
         };
 
-        // Initialiser le DataTable
-        const dataTableInstance = new DataTable('myTableContainer', options);
+        // Initialisation de la première table
+        const table1 = new DataTable('myTableContainer', options);
 
         console.log("DataTable initialisé !");
 
         // Écouter les événements (exemples)
-        dataTableInstance.element.addEventListener('dt:pageChange', (e) => {
+        table1.element.addEventListener('dt:pageChange', (e) => {
             console.log('Page changée:', e.detail);
         });
 
-        dataTableInstance.element.addEventListener('dt:sortChange', (e) => {
+        table1.element.addEventListener('dt:sortChange', (e) => {
             console.log('Tri changé:', e.detail);
         });
 
-        dataTableInstance.element.addEventListener('dt:search', (e) => {
+        table1.element.addEventListener('dt:search', (e) => {
             console.log('Recherche effectuée:', e.detail);
             // Si en mode serveur, ici on ferait l'appel API pour récupérer les nouvelles données
-            // puis on appellerait dataTableInstance.setData(nouvellesDonnees) et ajusterait options.serverSideTotalRows
+            // puis on appellerait table1.setData(nouvellesDonnees) et ajusterait options.serverSideTotalRows
         });
 
-        dataTableInstance.element.addEventListener('dt:actionClick', (e) => {
+        table1.element.addEventListener('dt:actionClick', (e) => {
             console.log('Action cliquée:', e.detail.action, 'sur ligne:', e.detail.rowData);
             if (e.detail.action === 'delete') {
                 if (confirm(`Voulez-vous vraiment supprimer la ligne avec ID ${e.detail.rowData[0]} ?`)) {
-                    dataTableInstance.deleteRowById(e.detail.rowData[0]);
+                    table1.deleteRowById(e.detail.rowData[0]);
                     console.log(`Ligne ${e.detail.rowData[0]} supprimée.`);
                 }
             }
             // Gérer les autres actions (view, edit...)
         });
 
-        dataTableInstance.element.addEventListener('dt:selectionChange', (e) => {
+        table1.element.addEventListener('dt:selectionChange', (e) => {
             console.log('Sélection changée:', e.detail);
             console.log('IDs sélectionnés:', e.detail.selectedIds);
             console.log('Données sélectionnées:', e.detail.selectedData); // Attention: peut être limité à la page visible en mode serveur
@@ -172,17 +164,17 @@
         // Exemple d'utilisation de l'API
         // setTimeout(() => {
         //     console.log("Ajout d'une nouvelle ligne...");
-        //     dataTableInstance.addRow([11, 'Nouveau', 'Test', 'test@new.com', '11 22 33 44 55', 99000]);
+        //     table1.addRow([11, 'Nouveau', 'Test', 'test@new.com', '11 22 33 44 55', 99000]);
         // }, 5000);
 
         // setTimeout(() => {
         //     console.log("Mise à jour de la ligne ID 2...");
-        //     dataTableInstance.updateRowById(2, [2, 'Martin-Modifié', 'Alice', 'alice.m@provider.net', '06 98 76 54 32', 63000]);
+        //     table1.updateRowById(2, [2, 'Martin-Modifié', 'Alice', 'alice.m@provider.net', '06 98 76 54 32', 63000]);
         // }, 7000);
 
         // setTimeout(() => {
         //     console.log("Sélection programmatique des lignes 1 et 4...");
-        //     dataTableInstance.setSelectedRowIds([1, 4]);
+        //     table1.setSelectedRowIds([1, 4]);
         // }, 9000);
 
         // Gestion du bouton de simulation de chargement
@@ -190,20 +182,20 @@
         if (loadingButton) {
             loadingButton.addEventListener('click', () => {
                 console.log('Bouton Simuler Chargement cliqué'); // <-- Log 1
-                console.log('Instance DataTable:', dataTableInstance); // <-- Log 2
-                if (dataTableInstance && typeof dataTableInstance.setLoading === 'function') {
-                    console.log('Appel de dataTableInstance.setLoading(true)...'); // <-- Log 3
-                    dataTableInstance.setLoading(true);
+                console.log('Instance DataTable:', table1); // <-- Log 2
+                if (table1 && typeof table1.setLoading === 'function') {
+                    console.log('Appel de table1.setLoading(true)...'); // <-- Log 3
+                    table1.setLoading(true);
 
                     // Simuler un délai (ex: appel API)
                     setTimeout(() => {
                         console.log('Fin du chargement simulé.'); // <-- Log 4
-                        if (dataTableInstance && typeof dataTableInstance.setLoading === 'function') {
-                             dataTableInstance.setLoading(false);
+                        if (table1 && typeof table1.setLoading === 'function') {
+                             table1.setLoading(false);
                         }
                     }, 2000); // Simule 2 secondes de chargement
                 } else {
-                    console.error('dataTableInstance ou setLoading non disponible!');
+                    console.error('table1 ou setLoading non disponible!');
                 }
             });
         }
@@ -258,7 +250,7 @@
             [8, 'Raisin', 180, '2023-11-30']
         ];
 
-        // Options pour la deuxième table (similaires, mais sans sélection/actions)
+        // Options pour la deuxième table
         const options2 = {
             columns: columns2,
             data: data2,
@@ -268,7 +260,9 @@
              columnFiltering: { 
                 enabled: true,
                 showClearButton: true 
-            }
+            },
+            // Activation de la persistance de l'état
+            stateManagement: { persist: true } 
         };
 
         // Initialisation de la deuxième table

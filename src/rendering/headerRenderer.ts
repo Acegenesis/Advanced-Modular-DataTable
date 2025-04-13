@@ -528,6 +528,164 @@ function createMultiSelectFilterPopup(instance: DataTable, columnIndex: number, 
     setTimeout(() => { document.addEventListener('click', handleOutsideClick, true); }, 0);
 }
 
+// --- Variables globales pour le redimensionnement ---
+let isResizing = false;
+let resizingColumnIndex: number | null = null;
+let startX: number = 0;
+let startWidth: number = 0;
+let currentTh: HTMLTableCellElement | null = null;
+let instanceRef: DataTable | null = null; // Référence à l'instance pendant le redim.
+
+// --- Fonctions de gestion du redimensionnement ---
+function handleMouseDown(event: MouseEvent, instance: DataTable, columnIndex: number) {
+    // !!! AJOUT LOG POUR DEBUG !!!
+    console.log(`[handleMouseDown] Triggered for column ${columnIndex}`); 
+    
+    const th = (event.currentTarget as HTMLElement).closest('th');
+    if (!th) {
+        console.log('[handleMouseDown] No TH found');
+        return;
+    }
+
+    isResizing = true;
+    resizingColumnIndex = columnIndex;
+    startX = event.clientX;
+    startWidth = th.offsetWidth;
+    currentTh = th;
+    instanceRef = instance;
+
+    // Ajouter les écouteurs globaux
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+
+    // Changer le curseur et empêcher la sélection de texte
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+}
+
+function handleMouseMove(event: MouseEvent) {
+    if (!isResizing || !currentTh) return;
+
+    const currentX = event.clientX;
+    const widthChange = currentX - startX;
+    let newWidth = startWidth + widthChange;
+    newWidth = Math.max(newWidth, 30); // Largeur minimale pendant le déplacement
+
+    // Mettre à jour la largeur visuelle directement
+    currentTh.style.width = `${newWidth}px`;
+    // Optionnel: Mettre à jour la largeur des cellules du corps en temps réel?
+    // Cela peut être coûteux. Mieux vaut le faire après mouseup.
+}
+
+function handleMouseUp(event: MouseEvent) {
+    if (!isResizing || resizingColumnIndex === null || !currentTh || !instanceRef) return;
+
+    const finalWidth = currentTh.offsetWidth;
+    // Enregistrer la largeur finale dans l'état
+    instanceRef.stateManager.setColumnWidth(resizingColumnIndex, finalWidth);
+
+    // Nettoyage
+    isResizing = false;
+    resizingColumnIndex = null;
+    startX = 0;
+    startWidth = 0;
+    currentTh = null;
+    instanceRef = null;
+
+    document.removeEventListener('mousemove', handleMouseMove);
+    document.removeEventListener('mouseup', handleMouseUp);
+
+    // Restaurer le curseur et la sélection
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+    
+    // On pourrait déclencher un render() ici si nécessaire, mais setColumnWidth sauvegarde déjà l'état
+    // et le prochain render complet appliquera la largeur depuis l'état.
+}
+
+// Nouvelle fonction pour l'autosize au double-clic
+function handleDoubleClickResize(event: MouseEvent, instance: DataTable, columnIndex: number) {
+    event.preventDefault();
+    event.stopPropagation();
+
+    const state = instance.stateManager;
+    const th = instance.element.querySelector(`thead th:nth-child(${columnIndex + 1 + (state.getSelectionEnabled() ? 1: 0)})`) as HTMLTableCellElement; // +1 pour nth-child, +1 si select all
+    const table = instance.element.querySelector('table');
+    const tbody = table?.tBodies[0];
+
+    if (!th || !tbody) return;
+
+    let maxContentWidth = 0;
+    
+    // --- Mesure Robuste du Contenu des Cellules --- 
+    // Créer un élément temporaire pour mesurer la largeur réelle du texte
+    const measureSpan = document.createElement('span');
+    measureSpan.style.position = 'absolute';
+    measureSpan.style.visibility = 'hidden';
+    measureSpan.style.whiteSpace = 'nowrap'; // Empêcher le retour à la ligne
+    measureSpan.style.height = 'auto';
+    measureSpan.style.width = 'auto';
+    measureSpan.style.padding = '0';
+    measureSpan.style.border = 'none';
+    measureSpan.style.fontSize = window.getComputedStyle(th).fontSize; // Utiliser la même taille de police
+    measureSpan.style.fontFamily = window.getComputedStyle(th).fontFamily;
+    document.body.appendChild(measureSpan);
+
+    // 1. Mesurer l'en-tête (juste le texte du titre)
+    const titleSpan = th.querySelector('span');
+    if (titleSpan?.textContent) {
+        measureSpan.textContent = titleSpan.textContent;
+        maxContentWidth = Math.max(maxContentWidth, measureSpan.offsetWidth);
+        console.log(`[DoubleClickResize] Header Text width: ${measureSpan.offsetWidth}`);
+    }
+
+    // 2. Mesurer les cellules du corps (texte uniquement)
+    const rows = tbody.rows;
+    for (let i = 0; i < rows.length; i++) {
+        const cell = rows[i].cells[columnIndex + (state.getSelectionEnabled() ? 1 : 0)];
+        if (cell?.textContent) {
+            measureSpan.textContent = cell.textContent;
+            const cellContentWidth = measureSpan.offsetWidth;
+            maxContentWidth = Math.max(maxContentWidth, cellContentWidth);
+            // Log limité
+            if (i < 5) console.log(`[DoubleClickResize] Cell[${i}] Text width: ${cellContentWidth}`);
+        }
+    }
+
+    // Supprimer l'élément de mesure temporaire
+    document.body.removeChild(measureSpan);
+
+    console.log(`[DoubleClickResize] Calculated maxContentWidth (text only): ${maxContentWidth}`);
+    
+    // 3. Calculer la largeur finale requise (Contenu Texte + Padding Cellules + Padding Final)
+    // Recalculer le padding ici car on l'avait enlevé
+    let horizontalPadding = 16; // Valeur par défaut
+    try {
+        const thStyle = window.getComputedStyle(th);
+        const thPadding = parseFloat(thStyle.paddingLeft) + parseFloat(thStyle.paddingRight);
+        if (!isNaN(thPadding)) horizontalPadding = thPadding;
+    } catch {} 
+    const extraPadding = 15; // Un peu plus généreux maintenant que la mesure est plus stricte
+    const requiredWidth = Math.max(maxContentWidth + horizontalPadding + extraPadding, 60); // Augmenter le min width?
+
+    // 4. Comparer avec la largeur actuelle et appliquer SEULEMENT si réduction
+    const currentWidth = th.offsetWidth; 
+    const tolerance = 2; 
+    console.log(`[DoubleClickResize] Current width: ${currentWidth}, Required width (text + padding): ${requiredWidth}`);
+
+    if (currentWidth > requiredWidth + tolerance) {
+        const finalWidth = requiredWidth;
+        console.log(`[DoubleClickResize] Reducing column ${columnIndex} to ${finalWidth}px`);
+
+        th.style.width = `${finalWidth}px`;
+        th.style.flexGrow = '0';
+        th.style.flexShrink = '0';
+        instance.stateManager.setColumnWidth(columnIndex, finalWidth);
+    } else {
+         console.log(`[DoubleClickResize] Column ${columnIndex} is already at or below required width. No change.`);
+    }
+}
+
 // --- Header Rendering Logic ---
 
 /**
@@ -554,7 +712,7 @@ export function renderHeader(instance: DataTable, table: HTMLTableElement): void
         const thCheckbox = document.createElement('th');
         thCheckbox.scope = 'col';
         thCheckbox.setAttribute('role', 'columnheader');
-        thCheckbox.className = 'px-4 py-3 text-center w-12 align-middle';
+        thCheckbox.className = 'px-4 py-3 text-center w-12 align-middle border-r border-gray-300';
         thCheckbox.style.boxSizing = 'border-box';
         instance.selectAllCheckbox = document.createElement('input');
         instance.selectAllCheckbox.type = 'checkbox';
@@ -566,20 +724,41 @@ export function renderHeader(instance: DataTable, table: HTMLTableElement): void
         });
         thCheckbox.appendChild(instance.selectAllCheckbox);
         headerRow.appendChild(thCheckbox);
+        
+        // Correction: Appliquer la largeur ICI, à l'intérieur du if
+        const checkboxColWidth = state.getColumnWidths().get(-1); 
+        if (checkboxColWidth) {
+            thCheckbox.style.width = `${checkboxColWidth}px`;
+            thCheckbox.style.flexGrow = '0'; // Rendre non-flexible
+            thCheckbox.style.flexShrink = '0';
+        }
     }
 
     instance.options.columns.forEach((columnDef: ColumnDefinition, index: number) => {
         const th = document.createElement('th');
         th.scope = 'col';
         th.setAttribute('role', 'columnheader');
-        th.className = 'px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider whitespace-nowrap overflow-hidden text-ellipsis';
+        th.className = 'px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider whitespace-nowrap overflow-hidden text-ellipsis border-r border-gray-300';
         th.style.boxSizing = 'border-box';
-        if (columnDef.width) {
+        th.style.position = 'relative';
+
+        // Appliquer la largeur sauvegardée/initiale
+        const currentWidth = state.getColumnWidths().get(index);
+        // !! AJOUT LOG POUR DEBUG !!
+        console.log(`[renderHeader] Applying width for column ${index}: ${currentWidth || 'default (' + columnDef.width + ')'}`); 
+        
+        if (currentWidth) {
+            th.style.width = `${currentWidth}px`;
+        } else if (columnDef.width) {
             th.style.width = columnDef.width;
+        }
+        if (currentWidth || columnDef.width) {
+             th.style.flexGrow = '0';
+             th.style.flexShrink = '0';
         }
 
         const cellContentContainer = document.createElement('div');
-        cellContentContainer.className = 'flex items-center justify-between';
+        cellContentContainer.className = 'flex items-center justify-between h-full';
         const titleContainer = document.createElement('div');
         titleContainer.className = 'flex items-center';
         const titleSpan = document.createElement('span');
@@ -597,7 +776,14 @@ export function renderHeader(instance: DataTable, table: HTMLTableElement): void
             th.tabIndex = 0;
             th.setAttribute('aria-roledescription', 'sortable column header');
             th.addEventListener('click', (e) => {
-                if (!(e.target as HTMLElement).closest('.dt-filter-control')) {
+                const targetElement = e.target as HTMLElement;
+                const isResizeHandle = targetElement.closest('.resizer-handle'); // Utiliser une classe spécifique
+                const isFilterControl = targetElement.closest('.dt-filter-control');
+
+                // !! AJOUT LOG POUR DEBUG !!
+                console.log(`[TH Click] Target:`, targetElement, `isResizeHandle: ${!!isResizeHandle}, isFilterControl: ${!!isFilterControl}`);
+
+                if (!isResizeHandle && !isFilterControl) {
                     handleSortClick(instance, index);
                 }
             });
@@ -675,6 +861,26 @@ export function renderHeader(instance: DataTable, table: HTMLTableElement): void
             cellContentContainer.appendChild(sortFilterContainer);
         }
         th.appendChild(cellContentContainer);
+
+        // --- Ajouter la poignée de redimensionnement AU TH
+        if (columnDef.resizable === true) { 
+            const resizer = document.createElement('div');
+            resizer.className = 'absolute top-0 right-0 h-full w-4 cursor-col-resize z-30 resizer-handle';
+            // Commentez/Décommentez pour debug visuel
+            // resizer.style.backgroundColor = 'rgba(255, 0, 0, 0.3)'; 
+            resizer.style.userSelect = 'none';
+            resizer.style.cursor = 'col-resize'; 
+            resizer.addEventListener('mousedown', (e) => {
+                 e.stopPropagation(); 
+                 handleMouseDown(e, instance, index);
+            });
+            // Ajout écouteur double-clic
+            resizer.addEventListener('dblclick', (e) => {
+                handleDoubleClickResize(e, instance, index);
+            });
+            th.appendChild(resizer); 
+        }
+
         headerRow.appendChild(th);
     });
 
@@ -684,5 +890,13 @@ export function renderHeader(instance: DataTable, table: HTMLTableElement): void
         thActions.className = 'px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider';
         thActions.textContent = 'Actions';
         headerRow.appendChild(thActions);
+
+        // Correction: Appliquer la largeur ICI, à l'intérieur du if
+        const actionsColWidth = state.getColumnWidths().get(-2);
+        if (actionsColWidth) {
+            thActions.style.width = `${actionsColWidth}px`;
+             thActions.style.flexGrow = '0'; // Rendre non-flexible
+             thActions.style.flexShrink = '0';
+        }
     }
 } 

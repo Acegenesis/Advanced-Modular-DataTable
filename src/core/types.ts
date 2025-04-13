@@ -18,6 +18,7 @@ export interface ColumnDefinition {
     currency?: string;
     width?: string;
     filterType?: 'text' | 'number' | 'date' | 'multi-select';
+    resizable?: boolean;
     filterOptions?: (string | { value: any; label: string })[];
     filterPlaceholder?: string;
     filterOperators?: TextFilterOperator[] | NumberFilterOperator[] | DateFilterOperator[] | MultiSelectFilterOperator[];
@@ -53,7 +54,7 @@ export interface DataTableOptions {
     processingMode?: 'client' | 'server';
     serverSideTotalRows?: number;
     serverSide?: {
-        fetchData: (params: ServerSideParams) => Promise<ServerSideResponse>;
+        fetchData?: (params: ServerSideParams) => Promise<{ data: any[][]; totalRecords: number }>;
     };
     selection?: {
         enabled: boolean;
@@ -69,6 +70,11 @@ export interface DataTableOptions {
     columnFiltering?: {
         enabled: boolean;
         showClearButton?: boolean;
+    };
+    // Nouvelle option pour la gestion de l'état
+    stateManagement?: {
+        persist?: boolean; // Activer/désactiver la persistance
+        prefix?: string; // Préfixe optionnel pour la clé localStorage
     };
 }
 

@@ -7,6 +7,98 @@ import { updateSelectAllCheckboxState } from "../features/selection";
 import { renderHeader } from "./headerRenderer";
 import { renderStandardBody } from "./bodyRenderer";
 import { exportToCSV } from "../features/exporting";
+import { ColumnDefinition, ColumnFilterState } from "../core/types";
+
+// --- Helper pour formater la valeur d'un filtre pour affichage ---
+function formatFilterValueForDisplay(value: any, columnDef?: ColumnDefinition): string {
+    if (Array.isArray(value)) {
+        return `[${value.map(v => `"${v}"`).join(', ')}]`; // Ex: ["Alice", "Bob"]
+    } else if (typeof value === 'object' && value !== null && 'from' in value && 'to' in value) {
+        return `${formatFilterValueForDisplay(value.from)} - ${formatFilterValueForDisplay(value.to)}`; // Ex: 100 - 500
+    } else if (columnDef?.type === 'date' && value) {
+        // Essayer de formater la date (simple pour l'instant)
+        try {
+            return new Date(String(value)).toLocaleDateString();
+        } catch { return String(value); }
+    } else if (columnDef?.type === 'money' && typeof value === 'number') {
+        try {
+            return value.toLocaleString(columnDef.locale || undefined, { style: 'currency', currency: columnDef.currency || 'USD' });
+        } catch { return String(value); }
+    }
+    // Pour les autres cas (string, number simple)
+    return String(value);
+}
+
+// --- Fonction pour rendre les indicateurs de filtres actifs ---
+function renderActiveFilters(instance: DataTable, container: HTMLElement): void {
+    const state = instance.stateManager;
+    container.innerHTML = '';
+    let hasActiveFilters = false;
+
+    // 1. Filtre global
+    const globalFilterTerm = state.getFilterTerm();
+    if (globalFilterTerm) {
+        hasActiveFilters = true;
+        const badge = createFilterBadge(
+            `Recherche: "${globalFilterTerm}"`,
+            () => { 
+                instance.stateManager.setFilterTerm('');
+                instance.render();
+            } 
+        );
+        container.appendChild(badge);
+    }
+
+    // 2. Filtres de colonne
+    const columnFilters = state.getColumnFilters();
+    columnFilters.forEach((filterState, columnIndex) => {
+        if (filterState && filterState.value !== null && filterState.value !== undefined) {
+            hasActiveFilters = true;
+            const columnDef = instance.options.columns[columnIndex];
+            const operator = filterState.operator || 'équivaut à';
+            const displayValue = formatFilterValueForDisplay(filterState.value, columnDef);
+            let operatorText = `${operator}`;
+            if(filterState.operator === 'in') operatorText = 'est dans';
+            if(filterState.operator === 'isEmpty') operatorText = 'est vide';
+            if(filterState.operator === 'isNotEmpty') operatorText = 'n\'est pas vide';
+            const text = `${columnDef.title} ${operatorText}${filterState.operator !== 'isEmpty' && filterState.operator !== 'isNotEmpty' ? `: ${displayValue}` : ''}`;
+
+            const badge = createFilterBadge(
+                text,
+                () => {
+                    instance.stateManager.setColumnFilter(columnIndex, null);
+                    instance.render();
+                }
+            );
+            container.appendChild(badge);
+        }
+    });
+
+    container.style.display = hasActiveFilters ? 'flex' : 'none';
+}
+
+// --- Helper pour créer un badge de filtre ---
+function createFilterBadge(text: string, onRemove: () => void): HTMLElement {
+    const badge = document.createElement('div');
+    badge.className = 'inline-flex items-center bg-gray-200 text-gray-700 text-xs font-medium px-2.5 py-0.5 rounded-full mr-2 mb-2';
+
+    const textSpan = document.createElement('span');
+    textSpan.textContent = text;
+    badge.appendChild(textSpan);
+
+    const removeButton = document.createElement('button');
+    removeButton.type = 'button';
+    removeButton.className = 'ml-1.5 inline-flex items-center justify-center h-4 w-4 rounded-full text-gray-500 hover:bg-gray-300 hover:text-gray-700 focus:outline-none focus:ring-1 focus:ring-gray-400';
+    removeButton.innerHTML = '&times;'; // caractère 'x'
+    removeButton.setAttribute('aria-label', `Supprimer le filtre: ${text}`);
+    removeButton.addEventListener('click', (e) => {
+        e.stopPropagation();
+        onRemove();
+    });
+    badge.appendChild(removeButton);
+
+    return badge;
+}
 
 // --- Main Rendering Orchestration ---
 
@@ -32,6 +124,13 @@ export function render(instance: DataTable): void {
     const mainContainer = document.createElement('div');
     // Optional: Add base classes to mainContainer if needed
     // mainContainer.className = 'datatable-wrapper';
+
+    // --- NOUVEAU: Barre d'indicateurs de filtres actifs ---
+    const activeFiltersContainer = document.createElement('div');
+    activeFiltersContainer.id = `${instance.element.id}-active-filters`;
+    activeFiltersContainer.className = 'mb-3 flex flex-wrap items-center'; // flex-wrap pour gérer plusieurs badges
+    activeFiltersContainer.style.display = 'none'; // Caché par défaut
+    mainContainer.appendChild(activeFiltersContainer);
 
     // --- Barre d'outils supérieure (Recherche, Export, Effacer Filtres, etc.) ---
     const toolbarContainer = document.createElement('div');
@@ -106,9 +205,12 @@ export function render(instance: DataTable): void {
     tableContainer.className = 'shadow overflow-x-auto border-b border-gray-200 sm:rounded-lg';
 
     const table = document.createElement('table');
-    table.className = 'min-w-full border-collapse table-fixed';
+    table.className = 'min-w-full border-collapse';
     table.style.width = '100%';
     table.setAttribute('role', 'grid');
+
+    // --- NOUVEAU: Mettre à jour les indicateurs de filtres AVANT le rendu du corps ---
+    renderActiveFilters(instance, activeFiltersContainer);
 
     // 4. Render Header & Body
     renderHeader(instance, table);
@@ -121,7 +223,7 @@ export function render(instance: DataTable): void {
 
     // 5. Render Pagination Controls
     if (instance.options.pagination?.enabled && currentTotalRows > state.getRowsPerPage()) {
-        renderPaginationControls(instance);
+        renderPaginationControls(instance, currentTotalRows);
     }
 
     // 6. Dispatch Render Complete Event

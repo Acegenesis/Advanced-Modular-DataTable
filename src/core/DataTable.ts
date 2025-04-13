@@ -42,7 +42,7 @@ export class DataTable {
         }
         
         // --- StateManager Setup ---
-        this.stateManager = new StateManager(this.options, options.data);
+        this.stateManager = new StateManager(this.options, options.data, elementId);
         // --- Initialisation DOM & Rendu ---
         this.debounceTimer = null;
         this.focusedElementId = null;
@@ -196,51 +196,47 @@ export class DataTable {
         this.setLoading(true);
 
         try {
-            const params = {
-                draw: Date.now(),
-                start: (this.stateManager.getCurrentPage() - 1) * this.stateManager.getRowsPerPage(),
-                length: this.stateManager.getRowsPerPage(),
-                search: {
-                    value: this.stateManager.getFilterTerm(),
-                    regex: false
-                },
-                order: this.stateManager.getSortColumnIndex() !== null
-                    ? [{ column: this.stateManager.getSortColumnIndex(), dir: this.stateManager.getSortDirection() }]
-                    : [],
-                columns: this.options.columns?.map((col, index) => ({
-                    data: col.data,
-                    name: col.name || '',
-                    searchable: col.searchable ?? true,
-                    orderable: col.sortable ?? true,
-                    search: {
-                        value: this.stateManager.getColumnFilters().get(index)?.value ?? '',
-                        regex: false
-                    }
-                })) || []
-            };
+            const params: ServerSideParams = {
+                 draw: Date.now(),
+                 start: (this.stateManager.getCurrentPage() - 1) * this.stateManager.getRowsPerPage(),
+                 length: this.stateManager.getRowsPerPage(),
+                 search: {
+                     value: this.stateManager.getFilterTerm(),
+                     regex: false
+                 },
+                 order: this.stateManager.getSortColumnIndex() !== null
+                     ? [{ column: this.stateManager.getSortColumnIndex() as number, dir: this.stateManager.getSortDirection() }]
+                     : [],
+                 columns: this.options.columns?.map((col, index) => ({
+                     data: col.data,
+                     name: col.name || '',
+                     searchable: col.searchable ?? true,
+                     orderable: col.sortable ?? true,
+                     search: {
+                         // S'assurer que la valeur passée est une chaîne
+                         value: String(this.stateManager.getColumnFilters().get(index)?.value ?? ''),
+                         regex: false
+                     }
+                 })) || []
+             };
 
-            console.log("[DataTable] Fetching data with params:", params);
+            // Utiliser la signature de fonction correcte
+            const response = await this.options.serverSide.fetchData(params);
 
-            const response = await this.options.serverSide.fetchData(params as ServerSideParams);
-
-             console.log("[DataTable] Received server response:", response);
-
-            if (!response || typeof response.recordsTotal !== 'number' || typeof response.recordsFiltered !== 'number' || !Array.isArray(response.data)) {
-                throw new Error("Format de réponse serveur invalide.");
-            }
-
+            // Correction: Utiliser response.totalRecords pour mettre à jour totalRows
+            this.stateManager.setTotalRows(response.totalRecords);
+            // Correction: Utiliser response.data pour setData
             this.stateManager.setData(response.data);
-            this.stateManager.setTotalRows(response.recordsFiltered);
 
         } catch (error) {
-            console.error("DataTable: Erreur lors de la récupération des données serveur:", error);
-            dispatchEvent(this, 'error', { message: "Erreur lors de la récupération des données serveur.", error });
-            this.stateManager.setData([]);
-            this.stateManager.setTotalRows(0);
+            console.error("DataTable: Erreur lors de la récupération des données côté serveur:", error);
+            dispatchEvent(this, 'error', { message: "Erreur de chargement des données serveur", error });
+             // Gérer l'erreur de manière appropriée, peut-être afficher un message
+             this.stateManager.setTotalRows(0);
+             this.stateManager.setData([]); 
         } finally {
             this.setLoading(false);
-             this.render();
-             dispatchEvent(this, 'dataLoad', { source: 'server', data: this.stateManager.getDisplayedData() });
+            this.render(); // Re-rendre après la récupération des données
         }
     }
 
