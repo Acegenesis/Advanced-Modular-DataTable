@@ -79,6 +79,15 @@
                 enabled: true,
                 debounceTime: 350 // Délai avant recherche
             },
+            exporting: { // <-- Configurer l'export
+                csv: {
+                    enabled: true,
+                    delimiter: ';', // Utiliser le point-virgule
+                    encoding: 'utf-8', // Garder UTF-8
+                    bom: false, // Ne pas ajouter de BOM
+                    filename: 'mes_donnees.csv' // Nom de fichier personnalisé
+                }
+            },
             selection: {
                 enabled: true, // Activer la sélection
                 mode: 'multiple' // 'single' ou 'multiple'
@@ -150,14 +159,22 @@
         const loadingButton = document.getElementById('simulateLoadingBtn');
         if (loadingButton) {
             loadingButton.addEventListener('click', () => {
-                console.log('Affichage du chargement...');
-                dataTableInstance.setLoading(true);
+                console.log('Bouton Simuler Chargement cliqué'); // <-- Log 1
+                console.log('Instance DataTable:', dataTableInstance); // <-- Log 2
+                if (dataTableInstance && typeof dataTableInstance.setLoading === 'function') {
+                    console.log('Appel de dataTableInstance.setLoading(true)...'); // <-- Log 3
+                    dataTableInstance.setLoading(true);
 
-                // Simuler un délai (ex: appel API)
-                setTimeout(() => {
-                    console.log('Fin du chargement.');
-                    dataTableInstance.setLoading(false);
-                }, 2000); // Simule 2 secondes de chargement
+                    // Simuler un délai (ex: appel API)
+                    setTimeout(() => {
+                        console.log('Fin du chargement simulé.'); // <-- Log 4
+                        if (dataTableInstance && typeof dataTableInstance.setLoading === 'function') {
+                             dataTableInstance.setLoading(false);
+                        }
+                    }, 2000); // Simule 2 secondes de chargement
+                } else {
+                    console.error('dataTableInstance ou setLoading non disponible!');
+                }
             });
         }
 

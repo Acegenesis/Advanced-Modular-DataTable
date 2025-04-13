@@ -1,4 +1,4 @@
-import { ColumnDefinition, DataTableOptions, RowAction, SortDirection } from './types';
+import { ColumnDefinition, DataTableOptions, RowAction, SortDirection, SortCriterion } from './types';
 import { dispatchEvent, dispatchPageChangeEvent, dispatchSelectionChangeEvent } from '../events/dispatcher';
 import { setData, addRow, deleteRowById, updateRowById } from '../data/dataManager';
 import { renderSearchInput, getFilteredData } from '../features/searching';
@@ -25,8 +25,7 @@ export class DataTable {
     public currentPage: number = 1;
     public rowsPerPage: number = 10; 
     public totalRows: number = 0;
-    public sortColumnIndex: number | null = null;
-    public sortDirection: SortDirection = 'none';
+    public sortCriteria: SortCriterion[] = [];
     public originalData: any[][]; // Holds original data in client mode, or current page data in server mode
     public filterTerm: string = '';
     public debounceTimer: number | null = null;
@@ -83,8 +82,11 @@ export class DataTable {
         this.currentPage = 1;
 
         // --- Initial State --- 
-        this.sortColumnIndex = null;
-        this.sortDirection = 'none';
+        if (this.options.sorting?.enabled && this.options.sorting.initialCriteria) {
+            this.sortCriteria = [...this.options.sorting.initialCriteria];
+        } else {
+            this.sortCriteria = [];
+        }
         this.filterTerm = '';
         this.debounceTimer = null;
 

@@ -1,7 +1,7 @@
 import { DataTable } from "../core/DataTable";
 import { handleSortClick } from "../features/sorting";
 import { handleSelectAllClick, updateSelectAllCheckboxState } from "../features/selection";
-import { ColumnDefinition } from "../core/types";
+import { ColumnDefinition, SortCriterion } from "../core/types";
 
 // --- Header Rendering Logic ---
 
@@ -66,36 +66,45 @@ export function renderHeader(instance: DataTable, table: HTMLTableElement): void
             th.tabIndex = 0; // Make it focusable
             th.setAttribute('aria-roledescription', 'sortable column header');
             
-            th.addEventListener('click', () => handleSortClick(instance, index));
+            th.addEventListener('click', (event) => handleSortClick(instance, index, event.shiftKey, event.ctrlKey));
             th.addEventListener('keydown', (event) => {
-                 if (event.key === 'Enter' || event.key === ' ') {
-                     event.preventDefault(); // Prevent scrolling on space
-                     handleSortClick(instance, index);
-                 }
-             });
+                if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    // Simuler shiftKey=false et ctrlKey=false pour le clavier
+                    handleSortClick(instance, index, false, false);
+                }
+            });
             
             let indicatorSymbol = ' ↕'; 
             let ariaSortValue: "ascending" | "descending" | "none" = "none";
             let sortDescription = 'non trié';
+            let sortOrderIndicator = ''; // Pour afficher 1, 2, ...
 
-            if (instance.sortColumnIndex === index && instance.sortDirection !== 'none') {
-                indicatorSymbol = instance.sortDirection === 'asc' ? ' ▲' : ' ▼';
-                ariaSortValue = instance.sortDirection === 'asc' ? 'ascending' : 'descending';
+            // Trouver le critère de tri pour cette colonne
+            const criterionIndex = instance.sortCriteria.findIndex(c => c.columnIndex === index);
+            if (criterionIndex !== -1) {
+                const criterion = instance.sortCriteria[criterionIndex];
+                indicatorSymbol = criterion.direction === 'asc' ? ' ▲' : ' ▼';
+                ariaSortValue = criterion.direction === 'asc' ? 'ascending' : 'descending';
                 th.classList.add('bg-gray-100'); 
-                sortDescription = instance.sortDirection === 'asc' ? 'trié par ordre croissant' : 'trié par ordre décroissant';
+                sortDescription = criterion.direction === 'asc' ? 'trié par ordre croissant' : 'trié par ordre décroissant';
+                // Afficher le numéro d'ordre si plus d'un critère
+                if (instance.sortCriteria.length > 1) {
+                    sortOrderIndicator = ` (${criterionIndex + 1})`;
+                }
              }
              
              const indicatorSpan = document.createElement('span');
              indicatorSpan.className = 'ml-1'; 
              indicatorSpan.setAttribute('aria-hidden', 'true'); 
-             indicatorSpan.textContent = indicatorSymbol;
+             indicatorSpan.textContent = indicatorSymbol + sortOrderIndicator;
              th.appendChild(indicatorSpan);
              th.setAttribute('aria-sort', ariaSortValue);
              
              // Accessible description (sr-only)
              const accessibleDescription = document.createElement('span');
-             accessibleDescription.className = 'sr-only'; 
-             accessibleDescription.textContent = `, ${sortDescription}, cliquez ou appuyez sur Entrée pour trier`;
+             accessibleDescription.className = 'sr-only';
+             accessibleDescription.textContent = `, ${sortDescription}${sortOrderIndicator ? `, priorité ${criterionIndex + 1}` : ''}, cliquez pour trier, Maj+clic pour ajouter/modifier, Ctrl+clic pour supprimer`;
              th.appendChild(accessibleDescription);
         } 
         headerRow.appendChild(th);

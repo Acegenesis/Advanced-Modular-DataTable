@@ -31,6 +31,7 @@ export interface DataTableOptions {
     };
     sorting?: {
         enabled: boolean;
+        initialCriteria?: SortCriterion[]; // <-- Option pour le tri initial multiple
     };
     searching?: {
         enabled: boolean;
@@ -45,7 +46,31 @@ export interface DataTableOptions {
         initialSelectedIds?: any[];   // IDs des lignes initialement sélectionnées (basé sur rowData[0])
     };
     loadingMessage?: string; // Message à afficher pendant le chargement
+    exporting?: {
+        csv?: CsvExportOptions | boolean; // Activer/configurer l'export CSV
+        // excel?: boolean; // Option future pour Excel
+    };
+}
+
+// Options spécifiques à l'export CSV
+export interface CsvExportOptions {
+    enabled?: boolean; // Garder une option enabled explicite si c'est un objet
+    delimiter?: string;
+    encoding?: string;
+    filename?: string;
+    bom?: boolean; // Optionnel: Ajouter un BOM (Byte Order Mark) pour UTF-8 ? (utile pour Excel)
 }
 
 export type SortDirection = 'asc' | 'desc' | 'none';
-export type PaginationStyle = 'simple' | 'numbered' | 'numbered-jump'; 
+export type PaginationStyle = 'simple' | 'numbered' | 'numbered-jump';
+
+// Critère de tri unique
+export interface SortCriterion {
+    columnIndex: number;
+    direction: SortDirection;
+}
+
+// Structure de l'événement dt:sortChange
+export interface SortChangeEventDetail {
+    criteria: SortCriterion[];
+} 

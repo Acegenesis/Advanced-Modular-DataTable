@@ -6,6 +6,7 @@ import { renderPaginationControls } from "../features/pagination";
 import { updateSelectAllCheckboxState } from "../features/selection";
 import { renderHeader } from "./headerRenderer";
 import { renderStandardBody } from "./bodyRenderer";
+import { exportToCSV } from "../features/exporting";
 
 // --- Main Rendering Orchestration ---
 
@@ -15,14 +16,53 @@ import { renderStandardBody } from "./bodyRenderer";
  * @param instance The DataTable instance.
  */
 export function render(instance: DataTable): void {
-    instance.element.innerHTML = ''; 
-    const mainContainer = document.createElement('div'); 
+    // Garder une référence à l'overlay s'il existe
+    const existingOverlay = instance.element.querySelector('.dt-loading-overlay') as HTMLElement | null;
+
+    // Vider l'élément principal SAUF l'overlay
+    Array.from(instance.element.children).forEach(child => {
+        if (!child.classList.contains('dt-loading-overlay')) {
+            instance.element.removeChild(child);
+        }
+    });
+
+    // instance.element.innerHTML = ''; // <-- Ancienne méthode qui supprimait tout
+    const mainContainer = document.createElement('div');
     // Optional: Add base classes to mainContainer if needed
     // mainContainer.className = 'datatable-wrapper';
 
+    // --- Barre d'outils supérieure (Recherche, Export, etc.) ---
+    const toolbarContainer = document.createElement('div');
+    toolbarContainer.className = 'mb-4 flex justify-between items-center'; // Ajoute un espace en dessous
+
     // 1. Render Search Input (if enabled)
+    let searchElement: HTMLElement | null = null;
     if (instance.options.searching?.enabled) {
-        renderSearchInput(instance, mainContainer);
+        searchElement = renderSearchInput(instance); // La fonction renvoie maintenant l'élément
+        toolbarContainer.appendChild(searchElement);
+    }
+
+    // Espace flexible si la recherche est activée
+    if (searchElement) {
+         const spacer = document.createElement('div');
+         spacer.className = 'flex-grow'; // Pousse les éléments suivants à droite
+         toolbarContainer.appendChild(spacer);
+    }
+
+    // Bouton d'export CSV (if enabled)
+    let exportButton: HTMLButtonElement | null = null;
+    if (instance.options.exporting?.csv) {
+        exportButton = document.createElement('button');
+        exportButton.textContent = 'Exporter CSV';
+        // Ajouter des classes Tailwind pour le style
+        exportButton.className = 'ml-3 px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500';
+        exportButton.addEventListener('click', () => exportToCSV(instance));
+        toolbarContainer.appendChild(exportButton);
+    }
+
+    // Ajouter le conteneur de la barre d'outils seulement s'il contient quelque chose
+    if (searchElement || exportButton) {
+        mainContainer.appendChild(toolbarContainer);
     }
 
     // 2. Data Preparation (Client-side only)
@@ -40,7 +80,8 @@ export function render(instance: DataTable): void {
 
     // 3. Render Table Structure
     const tableContainer = document.createElement('div');
-    tableContainer.className = 'mt-6 shadow overflow-x-auto border-b border-gray-200 sm:rounded-lg'; 
+    // Enlever la marge supérieure ici car la barre d'outils a maintenant une marge inférieure
+    tableContainer.className = 'shadow overflow-x-auto border-b border-gray-200 sm:rounded-lg';
 
     const table = document.createElement('table');
     table.className = 'min-w-full border-collapse table-fixed'; 
@@ -66,4 +107,9 @@ export function render(instance: DataTable): void {
 
     // 6. Dispatch Render Complete Event
     dispatchEvent(instance, 'dt:renderComplete');
+
+    // 7. S'assurer que l'overlay est le dernier élément (pour le z-index)
+    if (existingOverlay) {
+        instance.element.appendChild(existingOverlay);
+    }
 } 
