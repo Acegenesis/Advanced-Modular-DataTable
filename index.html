@@ -84,10 +84,9 @@
 
     <!-- Charger le bundle JS généré comme un module -->
     <script type="module">
-        // Importer la classe DataTable depuis le bundle
-        // Le chemin exact dépend de votre configuration de build
-        // import { DataTable, DataTableOptions } from './dist/index.js'; // Ajustez le chemin si nécessaire
-        import { DataTable } from './dist/index.js'; // On importe seulement la classe DataTable
+        // Importer la classe DataTable et le nouveau contrôleur
+        import { DataTable } from './dist/index.js';
+        import { ColumnVisibilityController } from './dist/index.js'; 
 
         // Exemple de données
         const data = [
@@ -110,9 +109,10 @@
 
         // Colonnes pour la première table
         const columns = [
-            { title: 'ID', type: 'number', sortable: true, width: '80px' },
+            { title: 'ID', field: 'id', type: 'number', sortable: true, width: '80px' },
             { 
                 title: 'Nom', 
+                field: 'nom',
                 type: 'string', 
                 sortable: true, 
                 searchable: true, 
@@ -123,6 +123,7 @@
             },
             {
                 title: 'Prénom',
+                field: 'prenom',
                 type: 'string',
                 searchable: true,
                 filterType: 'multi-select'
@@ -130,14 +131,16 @@
             },
             { 
                 title: 'Email', 
+                field: 'email',
                 type: 'mail', 
                 searchable: true, 
                 width: '200px',
                 resizable: true // Activation du redimensionnement
             },
-            { title: 'Téléphone', type: 'tel', searchable: false, width: '180px' },
+            { title: 'Téléphone', field: 'telephone', type: 'tel', searchable: false, width: '180px' },
             { 
                 title: 'Salaire', 
+                field: 'salaire',
                 type: 'money', 
                 sortable: true, 
                 locale: 'fr-FR', 
@@ -149,6 +152,7 @@
             },
             {
                 title: 'Statut',
+                field: 'statut',
                 width: '120px',
                 render: (data, row, columnDef, cellElement) => {
                     const statusClass = {
@@ -190,6 +194,7 @@
         const options = {
             columns: columns,
             data: data,
+            uniqueRowIdColumn: 'id',
             pagination: {
                 enabled: true,
                 rowsPerPage: 5,
@@ -218,6 +223,20 @@
 
         // Initialisation de la première table
         const table1 = new DataTable('myTableContainer', options);
+
+        // --- Configuration et Initialisation du Contrôleur de Visibilité --- 
+        const visibilityBreakpoints = {
+            sm: ['id', 'nom'],        // Utiliser les 'field' définis dans `columns`
+            md: ['+', 'email'],      
+            lg: ['+']                
+        };
+        if (typeof ColumnVisibilityController !== 'undefined') {
+            const visibilityController1 = new ColumnVisibilityController(table1, visibilityBreakpoints);
+            console.log("DataTable 1 initialisé avec contrôleur de visibilité !");
+        } else {
+            console.error("ColumnVisibilityController n'a pas été importé correctement.");
+        }
+        // ------------------------------------------------------------------
 
         console.log("DataTable initialisé !");
 

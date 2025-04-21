@@ -1,10 +1,12 @@
 import { DataTable } from "../core/DataTable";
 import { getCurrentPageData } from "../features/pagination";
-import { handleRowCheckboxClick } from "../features/selection";
+import { handleRowCheckboxClick, updateSelectAllCheckboxState } from "../features/selection";
 import { appendRenderedContent, renderCellByType } from "./cellRenderer";
 import { renderActionButtons } from './uiComponents';
 import { ColumnDefinition } from "../core/types";
-import { dispatchActionClickEvent } from "../events/dispatcher";
+import { dispatchActionClickEvent, dispatchEvent, dispatchSelectionChangeEvent } from "../events/dispatcher";
+import { formatCellValue } from "../utils/formatting";
+import { getRowId } from "../utils/dom";
 
 // --- Body Rendering Logic ---
 
@@ -108,6 +110,7 @@ export function renderStandardBody(instance: DataTable, table: HTMLTableElement,
     const selectionEnabled = state.getSelectionEnabled();
     const uniqueRowIdColumn = instance.options.uniqueRowIdColumn || 0;
     const rowActions = instance.options.rowActions;
+    const visibleColumns = state.getVisibleColumns();
 
     // Stocker les données de la page actuelle pour les retrouver lors du clic
     const currentPagedDataMap = new Map<string, any[]>();
@@ -173,6 +176,9 @@ export function renderStandardBody(instance: DataTable, table: HTMLTableElement,
         }
 
         columnOrder.forEach(originalIndex => {
+            if (!visibleColumns.has(originalIndex)) {
+                return;
+            }
             const columnDef = instance.options.columns[originalIndex];
             const cellData = row[originalIndex]; 
             const td = document.createElement('td'); 
@@ -300,4 +306,35 @@ function renderEmptyState(instance: DataTable, tbody: HTMLTableSectionElement): 
     cell.textContent = state.getFilterTerm()
         ? 'Aucun résultat trouvé pour votre recherche.'
         : 'Aucune donnée à afficher.';
+} 
+
+// --- Event Handlers for Body Interactions ---
+
+function handleRowClick(event: MouseEvent | KeyboardEvent, instance: DataTable, rowId: any) {
+    // Empêcher le clic sur la ligne si on clique sur un input, bouton ou lien dans la ligne
+    const target = event.target as HTMLElement;
+    if (target.closest('input, button, a, .dt-action-button')) {
+        return;
+    }
+
+    if (!instance.stateManager.getSelectionEnabled()) return;
+
+    // Gérer la sélection
+    instance.stateManager.toggleRowSelection(rowId);
+    updateSelectAllCheckboxState(instance);
+    dispatchSelectionChangeEvent(instance);
+    instance.render(); // Re-render pour mettre à jour le style de la ligne
+}
+
+function updateSelectAllCheckboxState(instance: DataTable) {
+    const state = instance.stateManager;
+    const selectedRowIds = state.getSelectedRowIds();
+    const selectionEnabled = state.getSelectionEnabled();
+    const selectAllCheckbox = document.querySelector(`#${instance.element.id}-select-all`) as HTMLInputElement;
+
+    if (selectionEnabled) {
+        selectAllCheckbox.checked = selectedRowIds.size === state.getTotalRowCount();
+    } else {
+        selectAllCheckbox.checked = false;
+    }
 } 

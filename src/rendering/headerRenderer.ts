@@ -938,49 +938,29 @@ export function renderHeader(instance: DataTable, table: HTMLTableElement): void
 
     const columnWidths = state.getColumnWidths();
     const columnOrder = state.getColumnOrder();
+    const visibleColumns = state.getVisibleColumns(); // <<< Récupérer les colonnes visibles
     const currentSortIndexState = state.getSortColumnIndex();
     const currentSortDirectionState = state.getSortDirection();
 
-    if (thead) {
-        // --- UPDATE MODE --- 
-        console.log('[renderHeader] Updating existing header.');
-        headerRow = thead.rows[0]; 
-        if (!headerRow) { 
-            table.removeChild(thead);
-            thead = null; // Force creation mode
-        } else {
-            // Find existing THs and update indicator SVG classes
-            headerRow.querySelectorAll('th[data-original-index]').forEach(thElement => {
-                const th = thElement as HTMLTableCellElement;
-                const originalIndex = parseInt(th.dataset.originalIndex || '-1', 10);
-                if (originalIndex === -1) return;
-
-                let finalSortState: 'ascending' | 'descending' | 'none' = 'none';
-                if (currentSortIndexState === originalIndex && currentSortDirectionState !== 'none') {
-                    finalSortState = currentSortDirectionState === 'asc' ? 'ascending' : 'descending';
-                }
-                
-                // Find the SVG and update its classes directly
-                const svgElement = th.querySelector('.dt-sort-indicator svg') as SVGSVGElement | null;
-                updateSortIndicatorSVG(svgElement, th, finalSortState);
-            });
-            return; // Update finished, exit the function
-        }
+    // --- Mise à jour ou Création de l'en-tête --- 
+    if (thead && thead.rows.length > 0) {
+        headerRow = thead.rows[0];
+        // En mode mise à jour, on pourrait cacher/afficher les TH existants,
+        // mais recréer est plus simple pour l'instant.
+        thead.innerHTML = ''; // Vider pour recréer
+        headerRow = thead.insertRow(); // Recréer la ligne
+        headerRow.setAttribute('role', 'row');
+    } else {
+        if (thead) table.removeChild(thead); // Supprimer l'ancien vide
+        thead = table.createTHead();
+        thead.className = 'bg-gray-50';
+        thead.style.position = 'sticky';
+        thead.style.top = '0';
+        thead.style.zIndex = '10';
+        headerRow = thead.insertRow();
+        headerRow.setAttribute('role', 'row');
     }
-
-    // --- CREATION MODE --- 
-    console.log('[renderHeader] Creating new header.');
-    thead = table.createTHead();
-    thead.className = 'bg-gray-50';
-    thead.style.position = 'sticky';
-    thead.style.top = '0';
-    thead.style.zIndex = '10';
-
-    headerRow = thead.insertRow();
-    headerRow.setAttribute('role', 'row');
-
-    console.log('[renderHeader - Create] Using column order:', columnOrder);
-
+    // --- Colonne Checkbox (si nécessaire) --- 
     if (state.getSelectionEnabled() && state.getSelectionMode() === 'multiple') {
         const thCheckbox = document.createElement('th');
         thCheckbox.scope = 'col';
@@ -988,17 +968,18 @@ export function renderHeader(instance: DataTable, table: HTMLTableElement): void
         thCheckbox.className = 'px-4 py-3 text-center w-12 align-middle border-r border-gray-300';
         thCheckbox.style.boxSizing = 'border-box';
         instance.selectAllCheckbox = document.createElement('input');
-        instance.selectAllCheckbox.type = 'checkbox';
-        instance.selectAllCheckbox.className = 'form-checkbox h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500';
-        updateSelectAllCheckboxState(instance);
-        instance.selectAllCheckbox.setAttribute('aria-label', 'Sélectionner toutes les lignes visibles');
-        instance.selectAllCheckbox.addEventListener('change', (event) => {
-            handleSelectAllClick(instance, (event.target as HTMLInputElement).checked);
-        });
+        // ... (configuration selectAllCheckbox et listener) ...
+         instance.selectAllCheckbox.type = 'checkbox';
+         instance.selectAllCheckbox.className = 'form-checkbox h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500';
+         instance.selectAllCheckbox.setAttribute('aria-label', 'Sélectionner toutes les lignes visibles');
+         instance.selectAllCheckbox.addEventListener('change', (event) => {
+             handleSelectAllClick(instance, (event.target as HTMLInputElement).checked);
+         });
         thCheckbox.appendChild(instance.selectAllCheckbox);
         headerRow.appendChild(thCheckbox);
-        
-        const checkboxColWidth = state.getColumnWidths().get(-1); 
+        updateSelectAllCheckboxState(instance);
+        // Appliquer largeur si sauvegardée
+        const checkboxColWidth = state.getColumnWidths().get(-1); // -1 pour la checkbox
         if (checkboxColWidth) {
             thCheckbox.style.width = `${checkboxColWidth}px`;
             thCheckbox.style.flexGrow = '0'; 
@@ -1006,75 +987,84 @@ export function renderHeader(instance: DataTable, table: HTMLTableElement): void
         }
     }
 
+    // --- Boucle principale sur l'ORDRE des colonnes --- 
     columnOrder.forEach(originalIndex => {
+        // >>> CONDITION DE VISIBILITÉ <<< 
+        if (!visibleColumns.has(originalIndex)) {
+            return; // Ne pas créer ce TH si la colonne n'est pas visible
+        }
+        // >>> FIN CONDITION <<<
+        
         const columnDef = instance.options.columns[originalIndex];
         if (!columnDef) {
-            console.warn(`[renderHeader - Create] Column definition not found for originalIndex ${originalIndex}. Skipping.`);
+            console.warn(`[renderHeader] Column definition not found for originalIndex ${originalIndex}. Skipping.`);
             return;
         }
     
         const th = document.createElement('th');
+        // ... (configuration du th: classes, styles, dataset, draggable, etc.) ...
         th.scope = 'col';
-        th.className = `
-            px-4 py-2 text-left text-xs font-semibold text-gray-600 
-            uppercase tracking-wider whitespace-nowrap overflow-hidden text-ellipsis 
-            border-r border-gray-300
-        `.trim();
+        th.setAttribute('role', 'columnheader');
+        th.className = `px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider whitespace-nowrap overflow-hidden text-ellipsis border-r border-gray-300`.trim();
         th.style.boxSizing = 'border-box';
-        th.style.position = 'relative';
+        th.style.position = 'relative'; // Pour resizer et potentiellement popups
         th.dataset.originalIndex = String(originalIndex);
-    
+        
+        // Application de la largeur (comme avant)
         const currentWidth = columnWidths.get(originalIndex);
         if (typeof currentWidth === 'number') {
             th.style.width = `${currentWidth}px`;
-            th.style.minWidth = `${currentWidth}px`;
-            th.style.maxWidth = `${currentWidth}px`;
+            th.style.minWidth = `${currentWidth}px`; 
+            th.style.maxWidth = `${currentWidth}px`; 
         } else if (columnDef.width) {
             th.style.width = columnDef.width;
             th.style.minWidth = columnDef.width;
         } else {
-            th.style.minWidth = '50px';
+             th.style.minWidth = '50px'; // Largeur minimale par défaut
         }
-    
+
+        // Activer Drag & Drop
         th.draggable = true;
         th.addEventListener('dragstart', (e) => handleDragStart(e, originalIndex));
         th.addEventListener('dragover', handleDragOver);
         th.addEventListener('dragleave', handleDragLeave);
         th.addEventListener('drop', (e) => handleDrop(e, instance, originalIndex));
         th.addEventListener('dragend', handleDragEnd);
-    
+
+        // Conteneur interne pour flex layout
         const cellContentContainer = document.createElement('div');
         cellContentContainer.className = 'flex items-center justify-between h-full';
-    
+
+        // Titre
         const titleContainer = document.createElement('div');
         titleContainer.className = 'flex items-center';
         const titleSpan = document.createElement('span');
         titleSpan.textContent = columnDef.title || '';
         titleContainer.appendChild(titleSpan);
         cellContentContainer.appendChild(titleContainer);
-    
+
+        // Conteneur pour les icônes tri/filtre
         const sortFilterContainer = document.createElement('div');
         sortFilterContainer.className = 'flex items-center space-x-1';
-    
+
+        // Indicateur de Tri (si colonne triable)
         const isSortable = instance.options.sorting?.enabled && columnDef.sortable !== false;
         if (isSortable) {
+             // ... (création et ajout de l'indicateur de tri SVG + listeners click/keydown)
             th.classList.add('cursor-pointer', 'hover:bg-gray-100', 'transition-colors', 'duration-150');
-            th.tabIndex = 0;
+            th.tabIndex = 0; 
             th.setAttribute('aria-roledescription', 'sortable column header');
-    
+
             const sortIndicatorSpan = document.createElement('span');
             sortIndicatorSpan.className = 'ml-1 dt-sort-indicator inline-block';
-    
-            const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
             
-            // Conditionnel : <use> ou <path>
+            const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
             if (instance.useSpriteSortArrow) {
                 const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
                 const iconId = instance.options.icons?.sortArrow || 'icon-sort-arrow'; 
                 use.setAttributeNS('http://www.w3.org/1999/xlink', 'href', `#${iconId}`);
                 svg.appendChild(use);
             } else {
-                // Fallback: SVG inline
                 svg.setAttribute('viewBox', '0 0 24 24');
                 svg.setAttribute('fill', 'none');
                 svg.setAttribute('stroke', 'currentColor');
@@ -1082,122 +1072,122 @@ export function renderHeader(instance: DataTable, table: HTMLTableElement): void
                 const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
                 path.setAttribute('stroke-linecap', 'round');
                 path.setAttribute('stroke-linejoin', 'round');
-                path.setAttribute('d', 'M5 15l7-7 7 7'); // Flèche vers le haut
+                path.setAttribute('d', 'M5 15l7-7 7 7');
                 svg.appendChild(path);
             }
-            // Appliquer les styles CSS via classe (.dt-sort-indicator svg)
-            // Assurez-vous que datatable-styles.css définit bien la taille, couleur, transition
-            
             sortIndicatorSpan.appendChild(svg);
             sortFilterContainer.appendChild(sortIndicatorSpan);
-    
+
             let initialSortState: 'ascending' | 'descending' | 'none' = 'none';
             if (currentSortIndexState === originalIndex && currentSortDirectionState !== 'none') {
                 initialSortState = currentSortDirectionState === 'asc' ? 'ascending' : 'descending';
             }
             updateSortIndicatorSVG(svg, th, initialSortState);
-    
+
+            // Listener pour le tri
             th.addEventListener('click', (e) => {
                 const targetElement = e.target as HTMLElement;
-                const isResizeHandle = targetElement.closest('.resizer-handle');
-                const isFilterControl = targetElement.closest('.dt-filter-control');
-                if (!isResizeHandle && !isFilterControl) {
-                    // 1. Déclencher la logique de tri (qui met à jour l'état et appelle render)
+                // Empêcher le tri si on clique sur le resizer ou un contrôle de filtre
+                if (!targetElement.closest('.resizer-handle') && !targetElement.closest('.dt-filter-control')) {
                     handleSortClick(instance, originalIndex);
-                    // 2. Le render appelera renderHeader en mode UPDATE, qui mettra à jour tous les SVG.
                 }
             });
-    
             th.addEventListener('keydown', (event) => {
-                if (event.key === 'Enter' || event.key === ' ') {
-                    event.preventDefault();
-                    th.click(); // Simuler le clic pour déclencher la mise à jour
-                }
-            });
+                 if (event.key === 'Enter' || event.key === ' ') {
+                     event.preventDefault();
+                     th.click(); 
+                 }
+             });
         }
-    
+
+        // Bouton de Filtre (si colonne filtrable)
         const isGloballyFilterable = instance.options.columnFiltering?.enabled;
         const filterType = columnDef.filterType;
         if (isGloballyFilterable && filterType && ['text', 'number', 'date', 'multi-select'].includes(filterType)) {
-            const currentFilter = state.getColumnFilters().get(originalIndex);
-            const filterControlContainer = document.createElement('div');
-            filterControlContainer.className = 'dt-filter-control ml-1';
-            const filterButton = document.createElement('button');
-            filterButton.type = 'button';
-            // Appliquer les classes de base + couleur conditionnelle
-            filterButton.className = `p-1 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500 ${currentFilter ? 'text-indigo-600 hover:text-indigo-800' : 'text-gray-400 hover:text-gray-600'}`;
-            
-            filterButton.innerHTML = ''; 
-            const svgFilter = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-            svgFilter.setAttribute('class', 'h-4 w-4');
-            svgFilter.setAttribute('fill', 'currentColor');
-            
-            // Conditionnel : <use> ou <path>
-            if (instance.useSpriteFilter) {
-                const useFilter = document.createElementNS('http://www.w3.org/2000/svg', 'use');
-                const iconFilterId = instance.options.icons?.filter || 'icon-filter'; 
-                useFilter.setAttributeNS('http://www.w3.org/1999/xlink', 'href', `#${iconFilterId}`);
-                svgFilter.appendChild(useFilter);
-            } else {
-                 // Fallback: SVG inline
-                 svgFilter.setAttribute('viewBox', '0 0 20 20');
-                 const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-                 path.setAttribute('fill-rule', 'evenodd');
-                 path.setAttribute('d', 'M3 3a1 1 0 011-1h12a1 1 0 011 1v3a1 1 0 01-.293.707L13 10.414V17a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6.586L3.293 6.707A1 1 0 013 6V3z');
-                 path.setAttribute('clip-rule', 'evenodd');
-                 svgFilter.appendChild(path);
-            }
-            filterButton.appendChild(svgFilter);
-            filterButton.setAttribute('aria-label', `Options de filtre pour ${columnDef.title}`);
-            filterButton.setAttribute('aria-haspopup', 'true');
-            filterButton.addEventListener('click', (e) => {
-                e.stopPropagation();
-                switch (filterType) {
-                    case 'text': createAdvancedTextFilterPopup(instance, originalIndex, columnDef, currentFilter, filterButton); break;
-                    case 'number': createAdvancedNumberFilterPopup(instance, originalIndex, columnDef, currentFilter, filterButton); break;
-                    case 'date': createAdvancedDateFilterPopup(instance, originalIndex, columnDef, currentFilter, filterButton); break;
-                    case 'multi-select': createMultiSelectFilterPopup(instance, originalIndex, columnDef, currentFilter, filterButton); break;
-                }
-            });
-            filterControlContainer.appendChild(filterButton);
-            sortFilterContainer.appendChild(filterControlContainer);
+             // ... (création et ajout du bouton de filtre SVG + listener click pour ouvrir popup) ...
+             const currentFilter = state.getColumnFilters().get(originalIndex);
+             const filterControlContainer = document.createElement('div');
+             filterControlContainer.className = 'dt-filter-control ml-1'; // Classe pour cibler
+             const filterButton = document.createElement('button');
+             filterButton.type = 'button';
+             filterButton.className = `p-1 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500 ${currentFilter ? 'text-indigo-600 hover:text-indigo-800' : 'text-gray-400 hover:text-gray-600'}`;
+             
+             const svgFilter = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+             svgFilter.setAttribute('class', 'h-4 w-4');
+             svgFilter.setAttribute('fill', 'currentColor');
+             
+             if (instance.useSpriteFilter) {
+                 const useFilter = document.createElementNS('http://www.w3.org/2000/svg', 'use');
+                 const iconFilterId = instance.options.icons?.filter || 'icon-filter'; 
+                 useFilter.setAttributeNS('http://www.w3.org/1999/xlink', 'href', `#${iconFilterId}`);
+                 svgFilter.appendChild(useFilter);
+             } else {
+                  svgFilter.setAttribute('viewBox', '0 0 20 20');
+                  const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                  path.setAttribute('fill-rule', 'evenodd');
+                  path.setAttribute('d', 'M3 3a1 1 0 011-1h12a1 1 0 011 1v3a1 1 0 01-.293.707L13 10.414V17a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6.586L3.293 6.707A1 1 0 013 6V3z');
+                  path.setAttribute('clip-rule', 'evenodd');
+                  svgFilter.appendChild(path);
+             }
+             filterButton.appendChild(svgFilter);
+             filterButton.setAttribute('aria-label', `Options de filtre pour ${columnDef.title}`);
+             filterButton.setAttribute('aria-haspopup', 'true');
+             filterButton.addEventListener('click', (e) => {
+                 e.stopPropagation(); // Empêcher le tri
+                 switch (filterType) {
+                     case 'text': createAdvancedTextFilterPopup(instance, originalIndex, columnDef, currentFilter, filterButton); break;
+                     case 'number': createAdvancedNumberFilterPopup(instance, originalIndex, columnDef, currentFilter, filterButton); break;
+                     case 'date': createAdvancedDateFilterPopup(instance, originalIndex, columnDef, currentFilter, filterButton); break;
+                     case 'multi-select': createMultiSelectFilterPopup(instance, originalIndex, columnDef, currentFilter, filterButton); break;
+                 }
+             });
+             filterControlContainer.appendChild(filterButton);
+             sortFilterContainer.appendChild(filterControlContainer);
         }
-    
+
+        // Ajouter le conteneur d'icônes s'il contient qqch
         if (sortFilterContainer.hasChildNodes()) {
             cellContentContainer.appendChild(sortFilterContainer);
         }
-    
+
         th.appendChild(cellContentContainer);
-    
-        if (columnDef.resizable === true) {
+
+        // Handle de Redimensionnement (si colonne redimensionnable)
+        if (columnDef.resizable === true || (columnDef.resizable !== false && instance.options.resizableColumns)) {
             const resizer = document.createElement('div');
-            resizer.className = 'absolute top-0 right-0 h-full w-4 cursor-col-resize z-30 resizer-handle';
+            // ... (configuration du resizer + listeners mousedown/dblclick) ...
+            resizer.className = 'absolute top-0 right-0 h-full w-4 cursor-col-resize z-30 resizer-handle'; // Classe pour cibler
             resizer.style.userSelect = 'none';
             resizer.style.cursor = 'col-resize';
             resizer.addEventListener('mousedown', (e) => {
-                e.stopPropagation();
-                handleMouseDown(e, instance, originalIndex);
-            });
-            resizer.addEventListener('dblclick', (e) => {
-                handleDoubleClickResize(e, instance, originalIndex);
-            });
+                 e.stopPropagation(); // Empêcher tri/drag
+                 handleMouseDown(e, instance, originalIndex);
+             });
+             resizer.addEventListener('dblclick', (e) => {
+                 e.stopPropagation(); // Empêcher tri
+                 handleDoubleClickResize(e, instance, originalIndex);
+             });
             th.appendChild(resizer);
         }
-    
+
         headerRow.appendChild(th);
     });
-    
+
+    // --- Colonne Actions (si nécessaire) --- 
     if (instance.options.rowActions && instance.options.rowActions.length > 0) {
         const thActions = document.createElement('th');
-        thActions.scope = 'col';
-        thActions.className = 'px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider';
-        thActions.textContent = 'Actions';
+        // ... (configuration du thActions) ...
+         thActions.scope = 'col';
+         thActions.setAttribute('role', 'columnheader');
+         thActions.className = 'px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider'; // Pas de bordure droite ici
+         thActions.textContent = instance.options.actionsColumn?.header || 'Actions';
         headerRow.appendChild(thActions);
-        const actionsColWidth = state.getColumnWidths().get(-2);
+        // Appliquer largeur si sauvegardée
+        const actionsColWidth = state.getColumnWidths().get(-2); // -2 pour les actions
         if (actionsColWidth) {
             thActions.style.width = `${actionsColWidth}px`;
-             thActions.style.flexGrow = '0'; 
-             thActions.style.flexShrink = '0';
+            thActions.style.flexGrow = '0'; 
+            thActions.style.flexShrink = '0';
         }
     }
 } 

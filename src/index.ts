@@ -1,12 +1,24 @@
 // Point d'entrée principal du package
 import { DataTable } from './core/DataTable';
 import { DataTableOptions, ColumnDefinition, RowAction, SortDirection } from './core/types';
+import { ColumnVisibilityController } from './controllers/ColumnVisibilityController';
 
-// Ré-exporter les types pour l'utilisateur
-export { DataTableOptions, ColumnDefinition, RowAction, SortDirection };
-
-// Exporter la classe DataTable
+// Exporter la classe principale
 export { DataTable };
+
+// Exporter le nouveau contrôleur
+export { ColumnVisibilityController };
+
+// Ré-exporter les types nécessaires pour l'utilisateur
+export type { 
+    DataTableOptions, 
+    ColumnDefinition, 
+    RowAction, 
+    PaginationOptions,
+    ServerSideParams,
+    ColumnFilterState,
+    SortDirection 
+} from './core/types';
 
 // Log pour confirmer le chargement
 console.log("DataTable package entry point loaded");

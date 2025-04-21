@@ -29,6 +29,7 @@ export class StateManager {
     public columnFilters: Map<number, ColumnFilterState> = new Map();
     public columnWidths: Map<number, number> = new Map();
     public columnOrder: number[] = [];
+    public visibleColumns: Set<number> = new Set();
 
     private options: DataTableOptions;
     private storageKey: string | null = null;
@@ -88,9 +89,14 @@ export class StateManager {
 
         // Initialiser l'ordre par défaut
         this.columnOrder = options.columns.map((_, index) => index);
+        // Initialiser la visibilité par défaut (tout visible)
+        this.visibleColumns = new Set(options.columns.map((_, index) => index));
 
         // --- Charger l'état sauvegardé (écrase certaines valeurs initiales) ---
         this._loadState();
+        // Note: La visibilité n'est PAS persistée pour l'instant pour rester simple.
+        // On la réinitialise toujours à tout visible au chargement.
+        this.visibleColumns = new Set(options.columns.map((_, index) => index));
 
         // --- Données (après chargement état pour pagination/tri initial) ---
         if (this.isServerSide) {
@@ -138,6 +144,7 @@ export class StateManager {
     getColumnFilters(): Map<number, ColumnFilterState> { return this.columnFilters; }
     getColumnWidths(): Map<number, number> { return new Map(this.columnWidths); }
     getColumnOrder(): number[] { return [...this.columnOrder]; }
+    getVisibleColumns(): Set<number> { return new Set(this.visibleColumns); }
 
     // --- Setters / Mutators ---
     setCurrentPage(page: number): void {
@@ -436,6 +443,30 @@ export class StateManager {
         }
         console.log(`[StateManager._deleteRowById] Row with ID ${rowId} deleted. New total (client):`, this.totalRows);
         // Pas de sauvegarde d'état ici.
+        return true;
+    }
+
+    setVisibleColumns(newVisibleSet: Set<number>): boolean {
+        if (this._areSetsEqual(this.visibleColumns, newVisibleSet)) {
+            return false; // Pas de changement
+        }
+        console.log('[StateManager] Setting visible columns:', newVisibleSet);
+        this.visibleColumns = new Set(newVisibleSet);
+        // Ne pas sauvegarder l'état de visibilité pour l'instant
+        // this._saveState();
+        return true; // Changement effectué
+    }
+
+    // Helper pour comparer les Sets
+    private _areSetsEqual(set1: Set<any>, set2: Set<any>): boolean {
+        if (set1.size !== set2.size) {
+            return false;
+        }
+        for (const item of set1) {
+            if (!set2.has(item)) {
+                return false;
+            }
+        }
         return true;
     }
 } 
