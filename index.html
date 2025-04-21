@@ -19,6 +19,34 @@
     </style>
 </head>
 <body>
+    <!-- SVG Sprite -->
+    <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+        <!-- Flèche de tri (simple flèche haut) -->
+        <symbol id="icon-sort-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M5 15l7-7 7 7"/>
+        </symbol>
+        
+        <!-- Icône Filtre -->
+        <symbol id="icon-filter" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M3 3a1 1 0 011-1h12a1 1 0 011 1v3a1 1 0 01-.293.707L13 10.414V17a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6.586L3.293 6.707A1 1 0 013 6V3z" clip-rule="evenodd" />
+        </symbol>
+
+        <!-- Flèche Chevron Bas (Dropdown) -->
+        <symbol id="icon-chevron-down" viewBox="0 0 20 20" fill="currentColor">
+             <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
+        </symbol>
+        
+        <!-- Flèche Pagination Précédent -->
+        <symbol id="icon-page-prev" viewBox="0 0 20 20" fill="currentColor">
+             <path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd" />
+        </symbol>
+        
+        <!-- Flèche Pagination Suivant -->
+        <symbol id="icon-page-next" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+        </symbol>
+    </svg>
+    <!-- Fin SVG Sprite -->
 
     <h1>DataTable Modulaire</h1>
 
@@ -34,6 +62,26 @@
         <!-- Le DataTable sera rendu ici -->
     </div>
 
+    <!-- Input de chargement CSV - SUPPRIMÉ ou COMMENTÉ -->
+    <!-- 
+    <div class="my-4">
+        <label for="csvFileInput" class="block text-sm font-medium text-gray-700">Charger depuis CSV :</label>
+        <input type="file" id="csvFileInput" accept=".csv" class="mt-1 block w-full text-sm text-gray-500
+            file:mr-4 file:py-2 file:px-4
+            file:rounded-full file:border-0
+            file:text-sm file:font-semibold
+            file:bg-indigo-50 file:text-indigo-700
+            hover:file:bg-indigo-100
+        "/>
+    </div>
+    -->
+
+    <!-- Nouveau conteneur pour la table chargée depuis large_data.csv -->
+    <div id="csvTableContainer" class="mt-8"></div>
+
+    <!-- Ancien conteneur vide (peut être supprimé si non utilisé) -->
+    <!-- <div id="dataTableContainer"></div> --> 
+
     <!-- Charger le bundle JS généré comme un module -->
     <script type="module">
         // Importer la classe DataTable depuis le bundle
@@ -43,26 +91,26 @@
 
         // Exemple de données
         const data = [
-            [1, 'Dupont', 'Jean', 'jean.dupont@email.com', '01 23 45 67 89', 50000],
-            [2, 'Martin', 'Alice', 'alice.martin@provider.net', '06 98 76 54 32', 62000],
-            [3, 'Durand', 'Pierre', 'p.durand@example.org', '04 11 22 33 44', 48000],
-            [4, 'Lefebvre', 'Sophie', 'sophie.lefebvre@mail.co', '07 55 66 77 88', 71000],
-            [5, 'Garcia', 'Luis', 'luis.garcia@server.es', '09 10 20 30 40', 55500],
-            [6, 'Moreau', 'Chloé', 'chloe.moreau@internet.fr', null, 68000], // Donnée manquante (téléphone)
-            [7, 'Girard', 'Lucas', 'lucas.girard@domain.com', '02 22 33 44 55', 45000],
-            [8, 'Bonnet', 'Manon', 'm.bonnet@service.eu', '03 12 34 56 78', 80000],
-            [9, 'Roux', 'Hugo', 'hugo.roux@web.info', '05 99 88 77 66', 51000],
-            [10, 'Vincent', 'Emma', 'emma.vincent@place.org', '01 02 03 04 05', 64000],
-            [11, 'Dubois', 'Thomas', 'thomas.dubois@example.com', '06 12 34 56 78', 52000],
-            [12, 'Girard', 'Lucas', 'lucas.girard@domain.com', '02 22 33 44 55', 45000],
-            [13, 'Girard', 'Lucas', 'lucas.girard@domain.com', '02 22 33 44 55', 45000],
-            [14, 'Girard', 'Lucas', 'lucas.girard@domain.com', '02 22 33 44 55', 45000],
-            [15, 'Girard', 'Lucas', 'lucas.girard@domain.com', '02 22 33 44 55', 45000],
+            [1, 'Dupont', 'Jean', 'jean.dupont@email.com', '01 23 45 67 89', 50000, 'Actif'],
+            [2, 'Martin', 'Alice', 'alice.martin@provider.net', '06 98 76 54 32', 62000, 'Actif'],
+            [3, 'Durand', 'Pierre', 'p.durand@example.org', '04 11 22 33 44', 48000, 'Inactif'],
+            [4, 'Lefebvre', 'Sophie', 'sophie.lefebvre@mail.co', '07 55 66 77 88', 71000, 'Actif'],
+            [5, 'Garcia', 'Luis', 'luis.garcia@server.es', '09 10 20 30 40', 55500, 'Attente'],
+            [6, 'Moreau', 'Chloé', 'chloe.moreau@internet.fr', null, 68000, 'Actif'],
+            [7, 'Girard', 'Lucas', 'lucas.girard@domain.com', '02 22 33 44 55', 45000, 'Inactif'],
+            [8, 'Bonnet', 'Manon', 'm.bonnet@service.eu', '03 12 34 56 78', 80000, 'Actif'],
+            [9, 'Roux', 'Hugo', 'hugo.roux@web.info', '05 99 88 77 66', 51000, 'Actif'],
+            [10, 'Vincent', 'Emma', 'emma.vincent@place.org', '01 02 03 04 05', 64000, 'Attente'],
+            [11, 'Dubois', 'Thomas', 'thomas.dubois@example.com', '06 12 34 56 78', 52000, 'Actif'],
+            [12, 'Girard', 'Lucas', 'lucas.girard@domain.com', '02 22 33 44 55', 45000, 'Inactif'],
+            [13, 'Petit', 'Leo', 'leo.petit@mail.net', '07 88 99 00 11', 49500, 'Actif'],
+            [14, 'Leroy', 'Camille', 'camille.leroy@xyz.org', '01 98 76 54 32', 75000, 'Actif'],
+            [15, 'Bernard', 'Jules', 'jules.bernard@provider.com', '04 55 66 77 88', 61000, 'Inactif']
         ];
 
         // Colonnes pour la première table
         const columns = [
-            { title: 'ID', type: 'number', sortable: false, width: '80px' }, // Non redimensionnable par défaut
+            { title: 'ID', type: 'number', sortable: true, width: '80px' },
             { 
                 title: 'Nom', 
                 type: 'string', 
@@ -98,6 +146,43 @@
                 filterType: 'number',
                 filterOperators: ['equals', 'notEquals', 'greaterThan', 'lessThan', 'greaterThanOrEqual', 'lessThanOrEqual', 'between', 'isEmpty', 'isNotEmpty'],
                 resizable: true // Activation du redimensionnement
+            },
+            {
+                title: 'Statut',
+                width: '120px',
+                render: (data, row, columnDef, cellElement) => {
+                    const statusClass = {
+                        Actif: "bg-green-100 text-green-800",
+                        Inactif: "bg-red-100 text-red-800",
+                        Attente: "bg-yellow-100 text-yellow-800"
+                    }[data] || "bg-gray-100 text-gray-800"; 
+
+                    cellElement.textContent = '';
+                    const badge = document.createElement('span');
+                    badge.className = `inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusClass}`;
+                    
+                    // Option 1: Texte visible (suffisant si clair)
+                    badge.textContent = data;
+                    
+                    // Option 2: Icône + Texte SR (si le texte visible n'est pas assez clair ou si on utilise une icône)
+                    /* 
+                    const icon = document.createElement('i'); // ou SVG
+                    icon.className = 'fa fa-circle !text-[6px] mr-1'; // Exemple icône
+                    icon.setAttribute('aria-hidden', 'true');
+                    badge.appendChild(icon);
+                    
+                    const textNode = document.createTextNode(data); // Texte visible
+                    badge.appendChild(textNode);
+
+                    // Ajouter le texte pour lecteur d'écran si nécessaire
+                    const srText = document.createElement('span');
+                    srText.className = 'sr-only';
+                    srText.textContent = ` (Statut: ${data})`; // Texte plus descriptif
+                    badge.appendChild(srText);
+                    */
+
+                    cellElement.appendChild(badge);
+                }
             }
         ];
 
@@ -152,14 +237,14 @@
         });
 
         table1.element.addEventListener('dt:actionClick', (e) => {
-            console.log('Action cliquée:', e.detail.action, 'sur ligne:', e.detail.rowData);
-            if (e.detail.action === 'delete') {
-                if (confirm(`Voulez-vous vraiment supprimer la ligne avec ID ${e.detail.rowData[0]} ?`)) {
-                    table1.deleteRowById(e.detail.rowData[0]);
-                    console.log(`Ligne ${e.detail.rowData[0]} supprimée.`);
+            console.log('Action cliquée (via délégation):', e.detail); 
+            // e.detail contient maintenant { actionId, rowData, rowId, rowIndex }
+            if (e.detail.actionId === 'delete') {
+                if (confirm(`Voulez-vous vraiment supprimer la ligne avec ID ${e.detail.rowId} ?`)) {
+                    table1.deleteRowById(e.detail.rowId);
+                    console.log(`Ligne ${e.detail.rowId} supprimée.`);
                 }
             }
-            // Gérer les autres actions (view, edit...)
         });
 
         table1.element.addEventListener('dt:selectionChange', (e) => {
@@ -275,6 +360,95 @@
 
         // Initialisation de la deuxième table
         const table2 = new DataTable('datatable2', options2);
+
+        // --- Initialisation de la table depuis large_data.csv --- 
+
+        // Fonction pour parser le CSV (simple)
+        function parseCsv(csvString) {
+            const rows = [];
+            const lines = csvString.trim().split(/\r?\n/);
+            for (const line of lines) {
+                if (line.trim() === '') continue;
+                rows.push(line.split(','));
+            }
+            return rows;
+        }
+
+        // Charger et initialiser la table CSV
+        async function initCsvTable() {
+            try {
+                const response = await fetch('./large_data.csv'); // Chemin relatif au fichier HTML
+                if (!response.ok) {
+                    throw new Error(`Erreur HTTP ${response.status} lors du chargement de large_data.csv`);
+                }
+                const csvText = await response.text();
+                const parsedData = parseCsv(csvText);
+
+                if (parsedData.length > 1) {
+                    const header = parsedData[0]; // ID,Nom,Email,Valeur,Date
+                    const dataRows = parsedData.slice(1);
+                    
+                    console.log(`Données CSV chargées: ${dataRows.length} lignes.`);
+
+                    // Définir les colonnes basées sur l'en-tête (ou manuellement)
+                    const csvColumns = header.map((title, index) => {
+                        let colOptions = { title: title, sortable: true, searchable: true };
+                        // Ajouter des options spécifiques si nécessaire
+                        if (title === 'ID' || title === 'Valeur') {
+                            colOptions.type = 'number';
+                            colOptions.filterType = 'number';
+                        } else if (title === 'Email') {
+                             colOptions.type = 'mail';
+                             colOptions.filterType = 'text';
+                        } else if (title === 'Date') {
+                             colOptions.type = 'string'; // Garder string car format YYYY-MM-DD
+                             colOptions.filterType = 'date'; // Mais permettre filtre date
+                        } else { // Nom
+                             colOptions.type = 'string';
+                             colOptions.filterType = 'text';
+                        }
+                        return colOptions;
+                    });
+
+                    // Options pour la table CSV
+                    const csvOptions = {
+                        columns: csvColumns,
+                        data: dataRows,
+                        pagination: {
+                            enabled: true,
+                            rowsPerPage: 50, // Mettre plus de lignes par page par défaut
+                            rowsPerPageOptions: [10, 25, 50, 100, 250, 500],
+                            style: 'numbered-jump'
+                        },
+                        sorting: { enabled: true },
+                        searching: { enabled: true },
+                        columnFiltering: { enabled: true, showClearButton: true },
+                        stateManagement: { persist: false } // Ne pas persister l'état pour cette grande table par défaut
+                    };
+                    
+                    // Titre pour la table CSV
+                    const titleCsv = document.createElement('h2');
+                    titleCsv.textContent = 'DataTable chargée depuis large_data.csv (6000 lignes)';
+                    titleCsv.className = 'text-xl font-semibold mb-4';
+                    document.getElementById('csvTableContainer').before(titleCsv);
+
+                    // Initialisation de la table CSV
+                    const csvTable = new DataTable('csvTableContainer', csvOptions);
+                    console.log("Table CSV initialisée.");
+
+                } else {
+                    console.error('Le fichier large_data.csv est vide ou ne contient pas de données après l\'en-tête.');
+                     document.getElementById('csvTableContainer').innerHTML = '<p class="text-red-500">Erreur: Impossible de charger les données depuis large_data.csv.</p>';
+                }
+
+            } catch (error) {
+                console.error("Erreur lors de l'initialisation de la table CSV:", error);
+                document.getElementById('csvTableContainer').innerHTML = `<p class="text-red-500">Erreur lors du chargement de large_data.csv: ${error.message}</p>`;
+            }
+        }
+
+        // Appeler l'initialisation de la table CSV
+        initCsvTable();
 
     </script>
 

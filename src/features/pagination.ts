@@ -32,7 +32,17 @@ function createPageButton(instance: DataTable, pageNumber: number, isCurrent: bo
     const state = instance.stateManager;
     const button = document.createElement('button');
     button.innerHTML = content ?? pageNumber.toString();
-    button.className = `relative inline-flex items-center px-4 py-2 border text-sm font-medium focus:z-10 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition ease-in-out duration-150 disabled:opacity-50 disabled:cursor-not-allowed`;
+    
+    // Classes de base
+    let baseClasses = 'relative inline-flex items-center border text-sm font-medium focus:z-10 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition ease-in-out duration-150 disabled:opacity-50 disabled:cursor-not-allowed';
+    
+    // Ajuster padding basé sur contenu (numéro vs icône)
+    if (content && content.includes('<svg')) {
+        baseClasses += ' px-2 py-2'; // Padding réduit pour icônes
+    } else {
+        baseClasses += ' px-4 py-2'; // Padding normal pour numéros
+    }
+    button.className = baseClasses;
 
     if (isCurrent) {
         button.className += ' z-10 bg-indigo-50 border-indigo-500 text-indigo-600';
@@ -42,20 +52,15 @@ function createPageButton(instance: DataTable, pageNumber: number, isCurrent: bo
         button.className += ' bg-white border-gray-300 text-gray-500 hover:bg-gray-50';
         if (!content) button.setAttribute('aria-label', `Aller à la page ${pageNumber}`);
         button.addEventListener('click', () => {
-            state.setCurrentPage(pageNumber);
-            dispatchPageChangeEvent(instance);
-            if (!state.getIsServerSide()) {
-                instance.render();
-            }
+            instance.goToPage(pageNumber);
         });
     }
+    // Ajouter classes pour coins arrondis pour prev/next en se basant sur les IDs ou le contenu SVG
+    const prevId = instance.options.icons?.pagePrev || 'icon-page-prev';
+    const nextId = instance.options.icons?.pageNext || 'icon-page-next';
+    if (content && (content.includes(`#${prevId}`) || content.includes('M12.707'))) button.classList.add('rounded-l-md');
+    if (content && (content.includes(`#${nextId}`) || content.includes('M7.293'))) button.classList.add('rounded-r-md');
 
-    if (content && content.includes('<svg')) {
-        button.classList.remove('px-4');
-        button.classList.add('px-2');
-        if (content.includes('M12.707')) button.classList.add('rounded-l-md');
-        if (content.includes('M7.293')) button.classList.add('rounded-r-md');
-    }
     return button;
 }
 
@@ -95,12 +100,28 @@ export function renderPaginationControls(instance: DataTable, displayRowCount: n
     const startItem = displayRowCount === 0 ? 0 : (currentPage - 1) * rowsPerPage + 1;
     const endItem = Math.min(startItem + rowsPerPage - 1, displayRowCount);
 
-    const defaultPrevContent = `<svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>`;
-    const defaultNextContent = `<svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" /></svg>`;
-    const defaultJumpText = 'Go';
-    const prevContent = paginationOptions.previousButtonContent ?? defaultPrevContent;
-    const nextContent = paginationOptions.nextButtonContent ?? defaultNextContent;
-    const jumpText = paginationOptions.jumpButtonText ?? defaultJumpText;
+    // --- Contenu des boutons via Sprite ou Fallback --- 
+    let prevContent: string;
+    let nextContent: string;
+
+    if (instance.useSpritePagePrev) {
+        const iconPrevId = instance.options.icons?.pagePrev || 'icon-page-prev';
+        prevContent = `<svg class="h-5 w-5" fill="currentColor" aria-hidden="true"><use href="#${iconPrevId}"></use></svg>`;
+    } else {
+        // Fallback SVG inline
+        prevContent = `<svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>`;
+    }
+
+    if (instance.useSpritePageNext) {
+        const iconNextId = instance.options.icons?.pageNext || 'icon-page-next';
+        nextContent = `<svg class="h-5 w-5" fill="currentColor" aria-hidden="true"><use href="#${iconNextId}"></use></svg>`;
+    } else {
+         // Fallback SVG inline
+        nextContent = `<svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" /></svg>`;
+    }
+
+    const jumpText = instance.options.pagination?.jumpButtonText ?? 'Go';
+    // --------------------------------------------------
 
     const leftContainer = document.createElement('div');
     leftContainer.className = 'flex-1 flex justify-start items-center space-x-4';
@@ -132,9 +153,7 @@ export function renderPaginationControls(instance: DataTable, displayRowCount: n
             const newRowsPerPage = parseInt((event.target as HTMLSelectElement).value, 10);
             if (!isNaN(newRowsPerPage) && newRowsPerPage > 0) {
                 state.setRowsPerPage(newRowsPerPage);
-                state.setCurrentPage(1);
-                dispatchPageChangeEvent(instance);
-                if (!state.getIsServerSide()) instance.render();
+                instance.goToPage(1);
             }
         });
         selectorContainer.appendChild(selectorLabel);
@@ -164,34 +183,36 @@ export function renderPaginationControls(instance: DataTable, displayRowCount: n
     
     const paginationStyle: PaginationStyle = paginationOptions.style || 'numbered-jump';
     if (paginationStyle === 'simple') {
+        // --- Style Simple --- 
         const simplePrev = document.createElement('button');
-        simplePrev.textContent = prevContent.replace(/<[^>]*>/g, '') || 'Précédent';
+        simplePrev.textContent = instance.options.pagination?.previousButtonContent || 'Précédent'; // Utiliser le texte ici
         simplePrev.disabled = currentPage === 1;
         simplePrev.className = 'relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed';
         if (!simplePrev.disabled) {
              simplePrev.addEventListener('click', () => {
-                 state.setCurrentPage(currentPage - 1);
-                 dispatchPageChangeEvent(instance);
-                 if (!state.getIsServerSide()) instance.render();
+                 instance.goToPage(currentPage - 1);
              });
         }
+
         const simpleNext = document.createElement('button');
-        simpleNext.textContent = nextContent.replace(/<[^>]*>/g, '') || 'Suivant';
+        simpleNext.textContent = instance.options.pagination?.nextButtonContent || 'Suivant'; // Utiliser le texte ici
         simpleNext.disabled = currentPage === totalPages || displayRowCount === 0;
         simpleNext.className = 'ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed';
         if (!simpleNext.disabled) {
              simpleNext.addEventListener('click', () => {
-                 state.setCurrentPage(currentPage + 1);
-                 dispatchPageChangeEvent(instance);
-                 if (!state.getIsServerSide()) instance.render();
+                 instance.goToPage(currentPage + 1);
              });
         }
+        
         rightContainer.appendChild(simplePrev);
         rightContainer.appendChild(simpleNext);
     } else {
+        // --- Styles Numbered / Numbered-Jump --- 
         const navContainer = document.createElement('nav');
         navContainer.className = 'relative z-0 inline-flex rounded-md shadow-sm -space-x-px';
         navContainer.setAttribute('aria-label', 'Pagination');
+        
+        // Ajouter les boutons Précédent/Suivant (qui ont maintenant les <use>)
         navContainer.appendChild(prevButton);
         
         const maxVisiblePages = 7; 
@@ -210,6 +231,8 @@ export function renderPaginationControls(instance: DataTable, displayRowCount: n
             if (endPage < totalPages - 1) navContainer.appendChild(createEllipsisElement());
             if (totalPages > 1) navContainer.appendChild(createPageButton(instance, totalPages, currentPage === totalPages));
         }
+        
+        // Ajouter le bouton Suivant (qui a maintenant le <use>)
         navContainer.appendChild(nextButton);
         rightContainer.appendChild(navContainer);
         
@@ -229,9 +252,7 @@ export function renderPaginationControls(instance: DataTable, displayRowCount: n
             const goToPage = () => {
                 const pageNum = parseInt(jumpInput.value, 10);
                 if (!isNaN(pageNum) && pageNum >= 1 && pageNum <= totalPages) {
-                    state.setCurrentPage(pageNum);
-                    dispatchPageChangeEvent(instance);
-                    if (!state.getIsServerSide()) instance.render();
+                    instance.goToPage(pageNum);
                 }
             };
             jumpButton.addEventListener('click', goToPage);
@@ -244,4 +265,5 @@ export function renderPaginationControls(instance: DataTable, displayRowCount: n
 
     targetContainer.appendChild(leftContainer);
     targetContainer.appendChild(rightContainer);
+    targetContainer.className = 'py-2 px-4 flex items-center justify-between border-t border-gray-200';
 } 

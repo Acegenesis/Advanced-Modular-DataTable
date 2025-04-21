@@ -867,6 +867,14 @@ function handleDrop(event: DragEvent, instance: DataTable, targetOriginalIndex: 
     instance.element.dispatchEvent(reorderEvent); 
     console.log(`[Drop] Dispatched dt:columnReorder event with order:`, newOrder);
 
+    // --- AJOUT : Supprimer l'ancien thead pour forcer la recréation ---
+    const table = instance.element.querySelector('table');
+    if (table?.tHead) {
+        table.removeChild(table.tHead);
+        console.log('[Drop] Removed existing thead to force recreation.');
+    }
+    // ----------------------------------------------------------------
+
     instance.render(); // Re-rendre pour appliquer le nouvel ordre
 
     // handleDragEnd sera appelé automatiquement par le navigateur pour nettoyer le style de l'élément glissé
@@ -1054,36 +1062,41 @@ export function renderHeader(instance: DataTable, table: HTMLTableElement): void
             th.tabIndex = 0;
             th.setAttribute('aria-roledescription', 'sortable column header');
     
-            // Crée le span wrapper (simple)
             const sortIndicatorSpan = document.createElement('span');
-            sortIndicatorSpan.className = 'ml-1 dt-sort-indicator inline-block'; // Plus besoin de classes de transition ici
+            sortIndicatorSpan.className = 'ml-1 dt-sort-indicator inline-block';
     
-            // Création du SVG
             const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-            svg.setAttribute('viewBox', '0 0 24 24');
-            svg.setAttribute('fill', 'none');
-            svg.setAttribute('stroke', 'currentColor');
-            svg.setAttribute('stroke-width', '2');
-            // SUPPRIMER les classes Tailwind appliquées ici
-            // svg.classList.add('h-4', 'w-4', 'transition-transform', /* 'transition-opacity', */ 'duration-150', 'ease-in-out'); 
-    
-            const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-            path.setAttribute('stroke-linecap', 'round');
-            path.setAttribute('stroke-linejoin', 'round');
-            path.setAttribute('d', 'M5 15l7-7 7 7'); // Flèche vers le haut
-            svg.appendChild(path);
+            
+            // Conditionnel : <use> ou <path>
+            if (instance.useSpriteSortArrow) {
+                const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
+                const iconId = instance.options.icons?.sortArrow || 'icon-sort-arrow'; 
+                use.setAttributeNS('http://www.w3.org/1999/xlink', 'href', `#${iconId}`);
+                svg.appendChild(use);
+            } else {
+                // Fallback: SVG inline
+                svg.setAttribute('viewBox', '0 0 24 24');
+                svg.setAttribute('fill', 'none');
+                svg.setAttribute('stroke', 'currentColor');
+                svg.setAttribute('stroke-width', '2');
+                const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                path.setAttribute('stroke-linecap', 'round');
+                path.setAttribute('stroke-linejoin', 'round');
+                path.setAttribute('d', 'M5 15l7-7 7 7'); // Flèche vers le haut
+                svg.appendChild(path);
+            }
+            // Appliquer les styles CSS via classe (.dt-sort-indicator svg)
+            // Assurez-vous que datatable-styles.css définit bien la taille, couleur, transition
+            
             sortIndicatorSpan.appendChild(svg);
             sortFilterContainer.appendChild(sortIndicatorSpan);
     
-            // Définir état initial du tri via la fonction helper
             let initialSortState: 'ascending' | 'descending' | 'none' = 'none';
             if (currentSortIndexState === originalIndex && currentSortDirectionState !== 'none') {
                 initialSortState = currentSortDirectionState === 'asc' ? 'ascending' : 'descending';
             }
-            // Appeler la fonction helper pour mettre les bonnes classes initiales sur le SVG et le TH
             updateSortIndicatorSVG(svg, th, initialSortState);
     
-            // Modifier le listener de clic pour appeler update sur TOUS les indicateurs
             th.addEventListener('click', (e) => {
                 const targetElement = e.target as HTMLElement;
                 const isResizeHandle = targetElement.closest('.resizer-handle');
@@ -1111,12 +1124,30 @@ export function renderHeader(instance: DataTable, table: HTMLTableElement): void
             filterControlContainer.className = 'dt-filter-control ml-1';
             const filterButton = document.createElement('button');
             filterButton.type = 'button';
-            filterButton.className = 'p-1 text-gray-400 hover:text-gray-600 focus:outline-none focus:ring-1 focus:ring-indigo-500 rounded';
-            filterButton.innerHTML = `
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="${currentFilter ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="${currentFilter ? 0 : 1.5}">
-                    <path fill-rule="evenodd" d="M3 3a1 1 0 011-1h12a1 1 0 011 1v3a1 1 0 01-.293.707L13 10.414V17a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6.586L3.293 6.707A1 1 0 013 6V3z" clip-rule="evenodd" />
-                </svg>
-            `;
+            // Appliquer les classes de base + couleur conditionnelle
+            filterButton.className = `p-1 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500 ${currentFilter ? 'text-indigo-600 hover:text-indigo-800' : 'text-gray-400 hover:text-gray-600'}`;
+            
+            filterButton.innerHTML = ''; 
+            const svgFilter = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+            svgFilter.setAttribute('class', 'h-4 w-4');
+            svgFilter.setAttribute('fill', 'currentColor');
+            
+            // Conditionnel : <use> ou <path>
+            if (instance.useSpriteFilter) {
+                const useFilter = document.createElementNS('http://www.w3.org/2000/svg', 'use');
+                const iconFilterId = instance.options.icons?.filter || 'icon-filter'; 
+                useFilter.setAttributeNS('http://www.w3.org/1999/xlink', 'href', `#${iconFilterId}`);
+                svgFilter.appendChild(useFilter);
+            } else {
+                 // Fallback: SVG inline
+                 svgFilter.setAttribute('viewBox', '0 0 20 20');
+                 const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                 path.setAttribute('fill-rule', 'evenodd');
+                 path.setAttribute('d', 'M3 3a1 1 0 011-1h12a1 1 0 011 1v3a1 1 0 01-.293.707L13 10.414V17a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6.586L3.293 6.707A1 1 0 013 6V3z');
+                 path.setAttribute('clip-rule', 'evenodd');
+                 svgFilter.appendChild(path);
+            }
+            filterButton.appendChild(svgFilter);
             filterButton.setAttribute('aria-label', `Options de filtre pour ${columnDef.title}`);
             filterButton.setAttribute('aria-haspopup', 'true');
             filterButton.addEventListener('click', (e) => {

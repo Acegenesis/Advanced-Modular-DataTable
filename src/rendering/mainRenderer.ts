@@ -215,8 +215,29 @@ export function render(instance: DataTable): void {
         exportButton.type = 'button';
         exportButton.id = `${instance.element.id}-export-button`;
         exportButton.textContent = 'Exporter'; 
-        exportButton.innerHTML += ' <svg class="inline-block w-4 h-4 ml-1 -mr-1" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" /></svg>';
-        exportButton.className = 'inline-flex justify-center w-full rounded-md border border-gray-300 shadow-sm px-4 py-1.5 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500';
+        // --- Remplacement SVG --- 
+        const svgExport = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        svgExport.setAttribute('class', 'inline-block w-4 h-4 ml-1 -mr-1');
+        svgExport.setAttribute('fill', 'currentColor');
+        
+        // Conditionnel: <use> ou <path>
+        if (instance.useSpriteDropdown) {
+            const useExport = document.createElementNS('http://www.w3.org/2000/svg', 'use');
+            const iconDropdownId = instance.options.icons?.dropdown || 'icon-chevron-down';
+            useExport.setAttributeNS('http://www.w3.org/1999/xlink', 'href', `#${iconDropdownId}`);
+            svgExport.appendChild(useExport);
+        } else {
+            // Fallback: SVG inline
+            svgExport.setAttribute('viewBox', '0 0 20 20');
+            const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            path.setAttribute('fill-rule', 'evenodd');
+            path.setAttribute('d', 'M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z');
+            path.setAttribute('clip-rule', 'evenodd');
+            svgExport.appendChild(path);
+        }
+        exportButton.appendChild(svgExport);
+        // ----------------------
+        exportButton.className = 'inline-flex items-center justify-center w-full rounded-md border border-gray-300 shadow-sm px-4 py-1.5 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500';
         exportButton.setAttribute('aria-haspopup', 'true');
         exportButton.setAttribute('aria-expanded', 'false');
         const exportDropdownMenu = document.createElement('div');
@@ -293,10 +314,9 @@ export function render(instance: DataTable): void {
     paginationContainer.setAttribute('role', 'navigation');
     paginationContainer.setAttribute('aria-label', 'Pagination');
     
-    // CORRIGER L'APPEL ICI : Passer le nouveau paginationContainer
     renderPaginationControls(instance, currentTotalRowsForPagination, paginationContainer);
     
-    mainContainer.appendChild(paginationContainer); // Ajouter le conteneur rempli au bon endroit
+    mainContainer.appendChild(paginationContainer);
 
     instance.element.appendChild(mainContainer);
     
@@ -307,4 +327,11 @@ export function render(instance: DataTable): void {
 
     console.log('[Render CREATE finished]');
     dispatchEvent(instance, 'dt:renderComplete', { mode: 'create' });
-} 
+}
+
+// --- Logique de chargement CSV --- 
+// SUPPRIMÉES car déplacées/remplacées par le chargement direct dans index.html
+// function parseCsv(csvString: string): string[][] { ... }
+// function setupCsvLoader(dataTableInstance: DataTable | null) { ... }
+
+// ... (reste des fonctions helper: handleOutsideExportClick, etc.) ... 

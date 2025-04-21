@@ -8,21 +8,37 @@ export type RowData<T extends RowId> = [T, ...any[]];
 // Types pour définir une colonne
 export interface ColumnDefinition {
     title: string;
-    data?: string;
-    name?: string;
-    type?: 'string' | 'number' | 'date' | 'mail' | 'tel' | 'money';
-    render?: (cellData: any, rowData: any[], rowIndex: number) => string | HTMLElement | DocumentFragment;
+    field?: string; // Optional data field mapping
+    type?: 'string' | 'number' | 'boolean' | 'date' | 'datetime' | 'money' | 'mail' | 'tel';
     sortable?: boolean;
     searchable?: boolean;
-    locale?: string;
-    currency?: string;
-    width?: string;
-    filterType?: 'text' | 'number' | 'date' | 'multi-select';
     resizable?: boolean;
-    filterOptions?: (string | { value: any; label: string })[];
+    width?: string; // e.g., '150px', '10%'
+    filterType?: 'text' | 'number' | 'date' | 'multi-select';
+    filterOptions?: (string | { value: string | number; label: string })[];
     filterPlaceholder?: string;
-    filterOperators?: TextFilterOperator[] | NumberFilterOperator[] | DateFilterOperator[] | MultiSelectFilterOperator[];
-    textAlign?: 'left' | 'center' | 'right' | 'justify';
+    filterOperators?: (TextFilterOperator | NumberFilterOperator | DateFilterOperator | MultiSelectFilterOperator)[];
+    locale?: string; // e.g., 'fr-FR', 'en-US' (for money/date formatting)
+    currency?: string; // e.g., 'EUR', 'USD' (for money formatting)
+    dateFormatOptions?: Intl.DateTimeFormatOptions; // Options for date/datetime formatting
+
+    /**
+     * Custom cell rendering function.
+     * @param data The cell data.
+     * @param row The full row data array.
+     * @param columnDef The column definition object.
+     * @param cellElement The TD element being rendered.
+     * @returns A string (automatically escaped unless unsafeRenderHtml is true), 
+     *          a DOM Node (HTMLElement, DocumentFragment), or void if modifying cellElement directly.
+     */
+    render?: (data: any, row: any[], columnDef: Readonly<ColumnDefinition>, cellElement: HTMLTableCellElement) => string | Node | void;
+    
+    /**
+     * If true, HTML returned as a string by the `render` function will be set via `innerHTML`.
+     * Use with caution due to XSS risks. Defaults to false (uses textContent).
+     * Ignored if `render` returns a Node or void.
+     */
+    unsafeRenderHtml?: boolean;
 }
 
 // Interface pour les actions
@@ -58,6 +74,15 @@ export interface PdfExportOptions {
     // ... autres options jspdf/autotable potentielles
 }
 
+// Interface pour spécifier les IDs des symboles SVG personnalisés
+export interface IconOptions {
+    sortArrow?: string; // ID du symbole pour la flèche de tri
+    filter?: string;    // ID du symbole pour l'icône de filtre
+    dropdown?: string;  // ID du symbole pour la flèche dropdown (ex: export)
+    pagePrev?: string;  // ID du symbole pour la flèche page précédente
+    pageNext?: string;  // ID du symbole pour la flèche page suivante
+}
+
 // Options principales
 export interface DataTableOptions {
     columns: ColumnDefinition[];
@@ -73,7 +98,6 @@ export interface DataTableOptions {
     serverSide?: { fetchData?: (params: ServerSideParams) => Promise<{ data: any[][]; totalRecords: number }>; };
     selection?: { enabled: boolean; mode?: 'single' | 'multiple'; initialSelectedIds?: any[]; };
     loadingMessage?: string;
-    // *** Modifier la structure de exporting ***
     exporting?: {
         csv?: CsvExportOptions | boolean;     // Garde la flexibilité existante
         excel?: ExcelExportOptions | boolean; // Permet d'activer/désactiver ou passer des options
@@ -82,6 +106,10 @@ export interface DataTableOptions {
     columnFiltering?: { enabled: boolean; showClearButton?: boolean; };
     stateManagement?: { persist?: boolean; prefix?: string; };
     resizableColumns?: boolean;
+    createdRowCallback?: (rowElement: HTMLTableRowElement, rowData: any[]) => void;
+    
+    /** Options pour personnaliser les icônes SVG utilisées (IDs des symboles du sprite) */
+    icons?: IconOptions;
 }
 
 // Opérateurs pour les filtres texte

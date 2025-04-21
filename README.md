@@ -1,233 +1,331 @@
-# DataTable Modulaire Avancée
+# Advanced Modular **DataTable** 🎛️
 
-Une bibliothèque JavaScript/TypeScript pour créer des tableaux de données interactifs et riches en fonctionnalités, construite de manière modulaire.
+![npm version](https://img.shields.io/npm/v/advanced-datatable?style=flat-square)
+![license](https://img.shields.io/github/license/your‑org/advanced-datatable?style=flat-square)
+![bundle size](https://img.shields.io/bundlephobia/minzip/advanced-datatable?style=flat-square)
 
-## Fonctionnalités Principales
-
-*   **Affichage de Données Tabulaires :** Rendu efficace de larges ensembles de données.
-*   **Tri Côté Client :** Tri sur une ou plusieurs colonnes, avec indicateurs visuels.
-*   **Recherche Globale :** Filtrage rapide sur l'ensemble des données.
-*   **Filtrage par Colonne :** Filtres avancés par type de données (texte, nombre, date, sélection multiple) avec popups dédiés.
-*   **Pagination :** Navigation par page avec plusieurs styles et sélecteur de lignes par page.
-*   **Sélection de Lignes :** Mode simple ou multiple, avec état persistant et API.
-*   **Actions sur les Lignes :** Définition facile de boutons d'action personnalisés par ligne.
-*   **Colonnes Redimensionnables :** Ajustement manuel de la largeur des colonnes par glisser-déposer et double-clic pour l'auto-ajustement (adapte la largeur au contenu le plus large de l'en-tête ou des cellules, plus une petite marge).
-*   **Réorganisation des Colonnes :** Modification de l'ordre des colonnes par glisser-déposer.
-*   **Exportation de Données :** Export des données (filtrées/triées) aux formats CSV, Excel (.xlsx) et PDF via un menu déroulant.
-*   **Persistance de l'État :** Sauvegarde automatique de l'état (page, tri, filtres, largeurs/ordre des colonnes) dans le `localStorage`.
-*   **Indicateur de Chargement :** Affichage d'un overlay pendant les opérations asynchrones (simulation incluse).
-*   **Rendu Personnalisé :** Possibilité de définir des fonctions de rendu spécifiques pour les cellules.
-*   **API Programmatique :** Méthodes pour interagir avec la table (ajout/suppression de lignes, etc.).
-*   **Événements Personnalisés :** Émission d'événements pour intégration avec d'autres parties de l'application.
-
-## Installation & Démarrage
-
-1.  **Cloner le dépôt** (si applicable)
-2.  **Installer les dépendances :**
-    ```bash
-    npm install
-    # ou
-    yarn install
-    ```
-    Cela installera les dépendances nécessaires, y compris `exceljs`, `jspdf`, et `jspdf-autotable` pour l'export.
-3.  **Lancer le build / serveur de développement :**
-    ```bash
-    npm run build # Pour compiler les fichiers TypeScript en JavaScript dans /dist
-    # ou
-    npm run start # Si un script 'start' est configuré (ex: avec live-server ou webpack-dev-server)
-    ```
-4.  Ouvrez le fichier `index.html` dans votre navigateur.
-
-## Utilisation Basique
-
-    ```html
-    <!DOCTYPE html>
-<html>
-    <head>
-    <title>DataTable</title>
-        <!-- Inclure CSS (ex: Tailwind) -->
-        <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
-    </head>
-    <body>
-    <div id="myTable"></div>
-
-        <script type="module">
-        import { DataTable } from './dist/index.js'; // Ajustez le chemin
-
-        const columns = [
-            { title: 'ID', type: 'number' },
-            { title: 'Nom', type: 'string' },
-            // ... autres colonnes
-        ];
-
-        const data = [
-            [1, 'Dupont'],
-            [2, 'Martin'],
-            // ... autres données
-            ];
-
-            const options = {
-                columns: columns,
-                data: data,
-                // ... autres options
-            };
-
-        const myDataTable = new DataTable('myTable', options);
-        </script>
-    </body>
-    </html>
-    ```
-
-## Options de Configuration (`DataTableOptions`)
-
-L'objet `options` passé au constructeur `DataTable` permet de configurer toutes les fonctionnalités.
-
-| Option                  | Type                                                         | Description                                                                                                                              |
-| :---------------------- | :----------------------------------------------------------- | :--------------------------------------------------------------------------------------------------------------------------------------- |
-| `columns`               | `ColumnDefinition[]`                                         | **Obligatoire.** Tableau définissant chaque colonne. Voir détails ci-dessous.                                                             |
-| `data`                  | `any[][]`                                                    | Données initiales à afficher. Chaque sous-tableau représente une ligne.                                                                    |
-| `uniqueRowIdColumn`     | `number` \| `string`                                           | Index (0-basé) ou `name` de la colonne contenant l'identifiant unique de chaque ligne. Défaut: 0. Utilisé pour la sélection et les actions. |
-| `pagination`            | `PaginationOptions`                                          | Options de pagination. Voir détails ci-dessous.                                                                                           |
-| `sorting`               | `{ enabled: boolean; }`                                      | Active (`true`) ou désactive (`false`) le tri globalement. Défaut: `{ enabled: false }`.                                                    |
-| `searching`             | `{ enabled: boolean; debounceTime?: number; }`              | Active la recherche globale. `debounceTime` (ms) pour limiter les appels au rendu (ex: 300).                                                 |
-| `selection`             | `{ enabled: boolean; mode?: 'single'\|'multiple'; initialSelectedIds?: any[]; }` | Active la sélection. `mode` ('single' ou 'multiple'). `initialSelectedIds` pour présélectionner.                                       |
-| `exporting`             | `{ csv?: boolean\|CsvExportOptions; excel?: boolean\|ExcelExportOptions; pdf?: boolean\|PdfExportOptions; }` | Configure les options d'export. Mettre à `true` pour activer un format, ou passer un objet d'options spécifiques.              |
-| `columnFiltering`       | `{ enabled: boolean; showClearButton?: boolean; }`           | Active le filtrage par colonne. `showClearButton` affiche un bouton pour effacer tous les filtres actifs.                               |
-| `rowActions`            | `RowAction[]`                                                | Définit les boutons d'action à afficher pour chaque ligne. Voir `RowAction` ci-dessous.                                                      |
-| `actionsColumn`         | `{ header?: string; width?: string; }`                       | Options pour la colonne d'actions (si `rowActions` est utilisé).                                                                            |
-| `stateManagement`       | `{ persist?: boolean; prefix?: string; }`                   | Active la persistance de l'état dans `localStorage`. `prefix` pour la clé de stockage.                                                     |
-| `resizableColumns`      | `boolean`                                                    | Active (`true`) ou désactive (`false`) globalement le redimensionnement des colonnes. Défaut: `false`.                                       |
-| `processingMode`        | `'client'` \| `'server'`                                     | Définit si le tri, le filtrage, la pagination sont gérés côté client ou serveur. Défaut: `'client'`.                                   |
-| `serverSideTotalRows` | `number`                                                     | **Requis si `processingMode` est 'server'.** Nombre total d'enregistrements côté serveur (après filtrage potentiel).                         |
-| `serverSide`            | `{ fetchData?: (params: ServerSideParams) => Promise<{ data: any[][]; totalRecords: number }>; }` | Fonction à appeler pour récupérer les données en mode serveur.                                                                           |
-| `loadingMessage`        | `string`                                                     | Message à afficher pendant le chargement. Défaut: "Chargement...".                                                                        |
-
-### `ColumnDefinition`
-
-Chaque objet dans le tableau `columns` définit une colonne.
-
-| Propriété         | Type                                                                | Description                                                                                                                                  |
-| :---------------- | :------------------------------------------------------------------ | :------------------------------------------------------------------------------------------------------------------------------------------- |
-| `title`           | `string`                                                            | **Obligatoire.** Texte affiché dans l'en-tête de la colonne.                                                                                   |
-| `type`            | `'string'`\|`'number'`\|`'date'`\|`'mail'`\|`'tel'`\|`'money'`       | Type de données pour le tri, le filtrage et potentiellement le rendu.                                                                            |
-| `width`           | `string`                                                            | Largeur initiale de la colonne (ex: '150px', '10%').                                                                                           |
-| `sortable`        | `boolean`                                                           | Permet le tri sur cette colonne si `sorting.enabled` est `true`. Défaut: `true`.                                                               |
-| `searchable`      | `boolean`                                                           | Inclut cette colonne dans la recherche globale si `searching.enabled` est `true`. Défaut: `true`.                                               |
-| `resizable`       | `boolean`                                                           | Permet le redimensionnement de cette colonne si `resizableColumns` est `true`. Défaut: `false` (ou la valeur de `resizableColumns`).          |
-| `textAlign`       | `'left'`\|`'center'`\|`'right'`\|`'justify'`                       | Alignement du texte dans les cellules de cette colonne.                                                                                       |
-| `render`          | `(cellData: any, rowData: any[], rowIndex: number) => string\|Node` | Fonction pour personnaliser le rendu HTML du contenu de la cellule. Reçoit la donnée de la cellule, la ligne complète et son index.           |
-| `filterType`      | `'text'`\|`'number'`\|`'date'`\|`'multi-select'`                    | Type de filtre à utiliser pour cette colonne si `columnFiltering.enabled` est `true`.                                                            |
-| `filterOptions`   | `(string \| { value: any; label: string })[]`                       | Options prédéfinies pour le filtre `multi-select`. Si omis, les options sont générées à partir des données uniques de la colonne.              |
-| `filterPlaceholder` | `string`                                                            | Placeholder pour le champ de saisie du filtre texte.                                                                                          |
-| `filterOperators` | `TextFilterOperator[]`\|`NumberFilterOperator[]`\|...               | Permet de restreindre les opérateurs disponibles dans les popups de filtre avancé (ex: `['equals', 'greaterThan']`).                      |
-| `locale`          | `string`                                                            | Locale pour le formatage `money` (ex: 'fr-FR', 'en-US').                                                                                      |
-| `currency`        | `string`                                                            | Code devise pour le formatage `money` (ex: 'EUR', 'USD').                                                                                     |
-| `name`            | `string`                                                            | Nom unique optionnel pour identifier la colonne (utile pour `uniqueRowIdColumn` si string).                                                |
-| `data`            | `string`                                                            | *(Non utilisé actuellement, prévu pour accès objet)*                                                                                          |
-
-### `PaginationOptions`
-
-| Option             | Type                   | Description                                                                                                                             |
-| :----------------- | :--------------------- | :-------------------------------------------------------------------------------------------------------------------------------------- |
-| `enabled`          | `boolean`              | Active (`true`) ou désactive (`false`) la pagination.                                                                                    |
-| `rowsPerPage`      | `number`               | Nombre de lignes à afficher par page. Défaut: 10.                                                                                       |
-| `rowsPerPageOptions` | `number[]`             | Tableau des choix disponibles pour le sélecteur "Lignes par page" (ex: `[10, 25, 50, 100]`). Si omis, le sélecteur n'est pas affiché. |
-| `style`            | `'simple'`\|`'numbered'`\|`'numbered-jump'` | Style des contrôles de pagination. Défaut: `'numbered-jump'`.                                                             |
-| `previousButtonContent`| `string`             | Contenu HTML/texte pour le bouton "Précédent".                                                                                          |
-| `nextButtonContent`| `string`             | Contenu HTML/texte pour le bouton "Suivant".                                                                                           |
-| `jumpButtonText`   | `string`             | Texte pour le bouton "Aller" du style `'numbered-jump'`.                                                                                |
-
-### `RowAction`
-
-| Propriété   | Type     | Description                                              |
-| :---------- | :------- | :------------------------------------------------------- |
-| `label`     | `string` | Texte affiché sur le bouton.                           |
-| `actionId`  | `string` | Identifiant unique pour cette action (utilisé dans l'événement `dt:actionClick`). |
-| `className` | `string` | Classes CSS additionnelles à appliquer au bouton.      |
-
-## API Programmatique
-
-L'instance `DataTable` expose plusieurs méthodes publiques :
-
-*   `setLoading(isLoading: boolean): void`: Affiche ou masque l'overlay de chargement.
-*   `setData(newData: any[][]): void`: Remplace complètement les données de la table.
-*   `addRow(newRowData: any[]): void`: Ajoute une nouvelle ligne à la fin.
-*   `updateRowById(rowId: any, updatedRowData: any[]): boolean`: Met à jour une ligne existante par son ID. Retourne `true` si la mise à jour a réussi, `false` sinon.
-*   `deleteRowById(rowId: any): boolean`: Supprime une ligne par son ID. Retourne `true` si la suppression a réussi, `false` sinon.
-*   `setSelectedRowIds(ids: any[]): void`: Définit les lignes sélectionnées.
-*   `getSelectedRowIds(): any[]`: Retourne un tableau des IDs des lignes sélectionnées.
-*   `getSelectedRowData(): any[][]`: Retourne les données complètes des lignes sélectionnées. *(Attention: mode serveur peut limiter)*
-*   `setPage(pageNumber: number): void`: Navigue vers une page spécifique.
-*   `clearAllFilters(): void`: Efface le filtre global et tous les filtres de colonne.
-*   `destroy(): void`: Nettoie les écouteurs d'événements et supprime les éléments du DOM créés par la table. *(Note: Le nettoyage des écouteurs globaux peut être amélioré)*.
-*   `render(): void`: Force un re-rendu complet de la table.
-
-## Événements Personnalisés
-
-La DataTable émet des événements personnalisés sur son élément racine (`instance.element`). Vous pouvez les écouter avec `addEventListener`. Les données spécifiques à l'événement sont dans `event.detail`.
-
-*   `dt:renderComplete`: Émis après chaque rendu complet de la table.
-*   `dt:pageChange`: Émis après un changement de page ou de nombre de lignes par page. `event.detail`: `{ currentPage: number; rowsPerPage: number; }`
-*   `dt:sortChange`: Émis après un changement de tri. `event.detail`: `{ columnIndex: number | null; direction: SortDirection; }`
-*   `dt:search`: Émis après une recherche globale. `event.detail`: `{ searchTerm: string; }`
-*   `dt:filterChange`: Émis après l'application ou la suppression d'un filtre de colonne. `event.detail`: `{ filters: Map<number, ColumnFilterState>; }`
-*   `dt:actionClick`: Émis lorsqu'un bouton d'action de ligne est cliqué. `event.detail`: `{ action: string; rowData: any[]; }`
-*   `dt:selectionChange`: Émis après un changement de sélection. `event.detail`: `{ selectedIds: any[]; selectedData: any[][]; }`
-*   `dt:columnResize`: Émis après le redimensionnement manuel d'une colonne. `event.detail`: `{ columnIndex: number; newWidth: number; }`
-*   `dt:columnReorder`: Émis après la réorganisation des colonnes. `event.detail`: `{ columnOrder: number[]; }`
-
-## Styling
-
-Le style par défaut utilise des classes **TailwindCSS**. Vous pouvez :
-
-*   Inclure Tailwind dans votre projet.
-*   Adapter les classes utilisées dans le code source (principalement dans les fichiers `src/rendering/*.ts`) à votre propre framework CSS ou à du CSS personnalisé.
-*   Surcharger les styles par défaut avec votre propre CSS.
+> **A lightweight, plugin‑driven JavaScript/TypeScript library for building high‑performance, feature‑rich data grids.**
 
 ---
 
-Ce README devrait fournir une bonne base. Vous pourrez l'affiner en ajoutant des exemples plus spécifiques, en détaillant le mode serveur si vous l'implémentez complètement, ou en documentant plus en profondeur l'API et les événements si nécessaire. 
+## ✨ Preview
 
+![DataTable demo](docs/assets/demo.gif)
 
-## Changelog / Évolution
+---
 
-### Fonctionnalités Implémentées
+## 📚 Table of Contents  
+- [Key Features](#key-features)  
+- [Quick Start](#quick-start)  
+- [Basic Usage](#basic-usage)  
+- [Configuration Options](#configuration-options)  
+- [Programmatic API](#programmatic-api)  
+- [Custom Events](#custom-events)  
+- [Styling](#styling)  
+- [Architecture](#architecture)  
+- [Roadmap & Changelog](#roadmap--changelog)
 
-*   **Fondations :** Affichage données, tri, recherche globale, pagination (client).
-*   **Filtrage Avancé :** Filtrage par colonne (texte, nombre, date, multi-select) avec popups et opérateurs.
-*   **Interactions :** Sélection de lignes (simple/multiple), actions par ligne.
-*   **Gestion des Colonnes :**
-    *   Redimensionnement manuel (glisser).
-    *   Redimensionnement automatique au double-clic (ajustement au contenu corps & en-tête).
-    *   Réorganisation par glisser-déposer.
-    *   Correction des conflits entre redimensionnement et réorganisation.
-*   **Export :**
-    *   Formats CSV, Excel (.xlsx via `exceljs`), PDF (via `jspdf` & `jspdf-autotable`).
-    *   Bouton unique "Exporter" avec menu déroulant.
-    *   Options de configuration pour activer/désactiver chaque format.
-*   **État & UX :**
-    *   Persistance de l'état (page, tri, filtres, largeurs/ordre colonnes) via `localStorage`.
-    *   Indicateur de chargement (`setLoading`).
-    *   Affichage persistant de la barre de pagination (même si une seule page).
+---
 
-### À Faire / Améliorations Possibles
+## 🚀 Key Features
 
-*   **Nettoyage :** Supprimer les `console.log` de débogage.
-*   **API & Événements :**
-    *   ~~Vérifier/finaliser l'implémentation des méthodes API (`addRow`, `updateRowById`, `deleteRowById`, `destroy`).~~
-    *   Améliorer la méthode `destroy` pour un nettoyage plus complet des écouteurs d'événements globaux.
-*   **Filtres :**
-    *   Améliorer l'UI des filtres (calendrier pour dates, slider pour nombres).
-    *   Permettre la sauvegarde/chargement de "vues" (combinaisons de filtres/tri).
-*   **Fonctionnalités Majeures :**
-    *   Édition en ligne des cellules.
-    *   Regroupement de lignes.
-*   Tri multi-colonnes.
-    *   Rendu virtuel/Scroll infini pour très grands datasets.
-*   **Export Avancé :**
-    *   Options de styling pour Excel.
-    *   Options de personnalisation pour PDF (titre, orientation dynamique, styles).
-*   **Général :**
-    *   Tester/améliorer le mode serveur (`serverSide`).
-    *   Améliorations UI/UX (animations, accessibilité).
-    *   Ajouter des tests unitaires et d'intégration. 
+| | Feature | Description |
+|:-:|:--|:--|
+| 🔢 | **Tabular Rendering** | Virtualised, blazing‑fast rendering of **large data sets**. |
+| ↕️ | **Client‑Side Sorting** | Single or multi‑column sort with visual indicators. |
+| 🔍 | **Global Search** | Instant, debounce‑controlled fuzzy search across all rows. |
+| 🧩 | **Per‑Column Filters** | Text, number, date & multi‑select pop‑ups with advanced operators. |
+| 📄 | **Pagination** | Simple, numbered or **numbered‑jump** modes with pre‑fetching of the next page. |
+| ☑️ | **Row Selection** | Single/Multiple selection with persistent state & public API. |
+| 🛠️ | **Row Actions** | Easily attach custom buttons (edit, delete, …) to each row. |
+| 📏 | **Resizable Columns** | Drag & double‑click to resize or auto‑fit. |
+| 🪢 | **Column Reorder** | Drag‑and‑drop any header to change order. |
+| 📤 | **Data Export** | Export current view to **CSV**, **Excel (.xlsx)** or **PDF**. |
+| 💾 | **State Persistence** | Automatic save/restore via `localStorage`. |
+| ⌛ | **Loading Overlay** | Full‑table overlay for async operations. |
+| 🖌️ | **Custom Cell Renderers** | Provide a render callback per column for total flexibility. |
+| 🖼️ | **Swappable Icons** | Uses SVG sprites via `<use>` with automatic inline fallback. |
+| 🔗 | **Fluent API & Events** | Rich programmatic API and granular custom events. |
+
+---
+
+## ⚡ Quick Start
+
+```bash
+# 1. Install
+npm install advanced-datatable
+
+# 2. Build / dev‑server
+npm run build       # compiles TS → /dist
+npm run dev         # live‑reload (vite / webpack‑dev‑server)
+
+# 3. Open the demo
+open examples/index.html     # or serve ./examples via any static server
+```
+
+> **Dependencies**: `exceljs`, `jspdf`, `jspdf-autotable` are **peer‑optional** – install them to unlock full export support.
+
+---
+
+## 🏗️ Basic Usage
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Advanced DataTable</title>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@^3/dist/tailwind.min.css" rel="stylesheet" />
+  <!-- Optional: SVG sprite with your custom icons -->
+  <!-- <svg style="display:none"> … </svg> -->
+</head>
+<body class="p-6 bg-gray-50">
+  <div id="usersTable"></div>
+
+  <script type="module">
+    import { DataTable } from "./dist/index.js";
+
+    const columns = [
+      { title: "ID",   type: "number" },
+      { title: "Name", type: "string" },
+      { title: "Email",type: "mail",  textAlign: "left" },
+      { title: "Salary",type: "money", locale: "en-US", currency: "USD" }
+    ];
+
+    // fetch() CSV example
+    const raw = await fetch("/data/users.csv").then(r => r.text());
+    const data = raw.split("\n").map(r => r.split(","));
+
+    const table = new DataTable("usersTable", {
+      columns,
+      data,
+      pagination:  { enabled: true, rowsPerPage: 15 },
+      sorting:     { enabled: true },
+      searching:   { enabled: true, debounceTime: 200 },
+      selection:   { enabled: true, mode: "multiple" },
+      exporting:   { csv: true, excel: true, pdf: true },
+      columnFiltering: { enabled: true },
+      resizableColumns: true,
+    });
+
+    table.on("dt:actionClick", ({ detail }) => console.log("Clicked", detail));
+  </script>
+</body>
+</html>
+```
+
+---
+
+## ⚙️ Configuration Options
+
+<details>
+<summary>Click to expand full <code>DataTableOptions</code> interface</summary>
+
+```ts
+interface DataTableOptions {
+  columns: ColumnDefinition[];                 // required
+  data: any[][];                              // initial data
+  uniqueRowIdColumn?: number | string;        // default = 0
+  pagination?: PaginationOptions;
+  sorting?:   { enabled: boolean };
+  searching?: { enabled: boolean; debounceTime?: number };
+  selection?: {
+    enabled: boolean;
+    mode?: 'single' | 'multiple';
+    initialSelectedIds?: any[];
+  };
+  exporting?: {
+    csv?:   boolean | CsvExportOptions;
+    excel?: boolean | ExcelExportOptions;
+    pdf?:   boolean | PdfExportOptions;
+  };
+  columnFiltering?: { enabled: boolean; showClearButton?: boolean };
+  rowActions?: RowAction[];
+  actionsColumn?: { header?: string; width?: string };
+  stateManagement?: { persist?: boolean; prefix?: string };
+  resizableColumns?: boolean;
+  processingMode?: 'client' | 'server';       // default = 'client'
+  serverSideTotalRows?: number;               // required if processingMode = 'server'
+  serverSide?: {
+    fetchData?: (params: ServerSideParams) => Promise<{ data: any[][]; totalRecords: number }>;
+  };
+  loadingMessage?: string;                    // default = "Loading…"
+  icons?: Partial<IconIds>;                   // override sprite IDs
+}
+```
+
+</details>
+
+> **Tip**: every option is documented in `docs/api.md` with full TypeScript definitions & examples.
+
+---
+
+## 🛠️ **Options Reference**
+
+Every option available in **`DataTableOptions`** is described below. The defaults refer to the client‑side processing mode.
+
+| Option | Type | Default | Description |
+| :-- | :-- | :-- | :-- |
+| `columns` | `ColumnDefinition[]` | — | **Required.** Declarative definition of each column’s header, data type, formatting rules and filtering behaviour. |
+| `data` | `any[][]` | `[]` | Initial row data. Each nested array is a row; cells are accessed by column index. |
+| `uniqueRowIdColumn` | `number \| string` | `0` | Index **or** column `name` whose value is treated as the row’s primary key. Used for selection, updates & persistence. |
+| `pagination` | `PaginationOptions` | `{ enabled:false }` | Enables paging and fine‑grained control over its UI. |
+| `sorting` | `{ enabled:boolean }` | `{ enabled:false }` | Master switch for client‑side sorting (single or multi‑column depending on UI). |
+| `searching` | `{ enabled:boolean; debounceTime?:number }` | `{ enabled:false }` | Turns on global text search. `debounceTime` throttles keystrokes (ms). |
+| `selection` | `{ enabled:boolean; mode?:'single'\|'multiple'; initialSelectedIds?:any[] }` | `{ enabled:false }` | Row‑selection module. `initialSelectedIds` pre‑selects rows. |
+| `exporting` | `{ csv?:boolean\|CsvExportOptions; excel?:boolean\|ExcelExportOptions; pdf?:boolean\|PdfExportOptions }` | — | Show *Export* dropdown. Pass an object to tweak filename, delimiter, sheet name, PDF orientation, … |
+| `columnFiltering` | `{ enabled:boolean; showClearButton?:boolean }` | `{ enabled:false }` | Toggles column‑level filter pop‑ups. `showClearButton` adds a *Clear* CTA inside each popup. |
+| `rowActions` | `RowAction[]` | `[]` | Array of buttons rendered inside the *actions* column for every row. |
+| `actionsColumn` | `{ header?:string; width?:string }` | `{ header:"Actions", width:"auto" }` | Change the header label or fixed width of the actions column. |
+| `stateManagement` | `{ persist?:boolean; prefix?:string }` | `{ persist:false, prefix:"dt_" }` | Automatic save / restore of paging, sorting, filters, column order & widths using `localStorage`. |
+| `resizableColumns` | `boolean` | `false` | Makes all columns resizable **unless** a column overrides `resizable:false`. |
+| `processingMode` | `'client' \| 'server'` | `'client'` | Switches between built‑in data processing and remote/virtual data. |
+| `serverSideTotalRows` | `number` | — | **Required in `'server'` mode.** Total rows available on the backend – used to compute total pages. |
+| `serverSide` | `{ fetchData:(params)=>Promise<{data:any[][]; totalRecords:number}> }` | — | Async hook that must resolve the next page slice when paging / sorting / filtering. |
+| `loadingMessage` | `string` | "Loading…" | Text shown inside the translucent loading overlay. |
+| `icons` | `Partial<IconIds>` | defaults in code | Override SVG sprite IDs (`sortArrow`, `filter`, …). |
+
+### `ColumnDefinition`
+
+| Property | Type | Default | Description |
+| :-- | :-- | :-- | :-- |
+| `title` | `string` | — | **Required.** Header label. |
+| `type` | `'string' \|'number' \|'date' \|'mail' \|'tel' \|'money'` | `'string'` | Influences sorting, filter UI & formatting. |
+| `width` | `string` | "auto" | Initial CSS width (`px`, `%`, `rem`…). |
+| `sortable` | `boolean` | `true` | Disable per‑column to exclude from sorting even when global sorting is enabled. |
+| `searchable` | `boolean` | `true` | Exclude this column from global search while keeping others. |
+| `resizable` | `boolean` | inherits `resizableColumns` | Opt‑out of header drag‑resize just for this column. |
+| `textAlign` | `'left' \|'center' \|'right' \|'justify'` | `'left'` | Cell text alignment. |
+| `render` | `(cell,row,rowIndex,cellEl)=>string \| Node \| void` | — | Custom renderer – return HTML or mutate `cellEl` directly. |
+| `filterType` | `'text' \|'number' \|'date' \|'multi-select'` | inferred from `type` | Force a specific filter UI. |
+| `filterOptions` | `(string \| {value:any;label:string})[]` | — | Pre‑defined values for multi‑select filter. |
+| `filterPlaceholder` | `string` | — | Placeholder for text/number/date filter input. |
+| `filterOperators` | narrowed operator enum | full operator set | Restrict operator dropdown (e.g. only `equals`, `contains`). |
+| `locale` | `string` | browser locale | For money & date formatting. |
+| `currency` | `string` | "USD" | ISO 4217 code used when `type:'money'`. |
+| `name` | `string` | — | Stable identifier (string) alternative to numeric index. |
+| `data` | `string` | — | (Planned) dot‑path into object rows instead of array rows. |
+
+### `PaginationOptions`
+
+| Option | Type | Default | Description |
+| :-- | :-- | :-- | :-- |
+| `enabled` | `boolean` | `false` | Master switch for the pagination plugin. |
+| `rowsPerPage` | `number` | `10` | Visible rows per page. |
+| `rowsPerPageOptions` | `number[]` | `[10,25,50,100]` | Presets for the *rows‑per‑page* selector; omit to hide selector. |
+| `style` | `'simple' \|'numbered' \|'numbered-jump'` | `'numbered-jump'` | Choose a pager layout.
+| `previousButtonContent` | `string` | « ◀ » icon | Custom HTML for *Prev* button (glyph, SVG, text…). |
+| `nextButtonContent` | `string` | « ▶ » icon | Same for *Next* button. |
+| `jumpButtonText` | `string` | "Go" | Caption on the page‑jump submit button.
+
+> 🛈 Most nested option objects accept either a **boolean** (simple on/off) or a **detailed object** for fine‑tuning.
+
+## 🔌 Programmatic API
+
+```ts
+const table = new DataTable("el", options);
+
+table.setLoading(true);
+table.setData(newDataArray);
+table.addRow([3, "Jane", "jane@mail.com"]);
+...
+```
+
+| Category | Methods |
+|:--|:--|
+| **Data** | `setData`, `addRow`, `updateRowById`, `deleteRowById`, `refreshData` |
+| **Paging** | `setPage`, `goToPage`, `getState` |
+| **Sorting & Filters** | `setSort`, `setColumnFilter`, `clearAllFilters` |
+| **Selection** | `setSelectedRowIds`, `getSelectedRowIds`, `getSelectedRowData` |
+| **Lifecycle** | `render`, `destroy`, `setLoading` |
+
+---
+
+## 📣 Custom Events
+
+All events are emitted from `table.element` and carry details under `event.detail`.
+
+| Event | Fires when… | detail |
+|:--|:--|:--|
+| `dt:renderComplete` | the table (re)renders | `{ mode: 'create' | 'update' }` |
+| `dt:pageChange` | current page / rowsPerPage changes | `{ currentPage, rowsPerPage }` |
+| `dt:sortChange` | sort order changes | `{ sortColumnIndex, sortDirection }` |
+| `dt:search` | global search term changes | `{ searchTerm }` |
+| `dt:filterChange` | any column/global filter mutates | `{ type: 'column' | 'global' | 'clearAll' }` |
+| `dt:actionClick` | a row‑action button is pressed | `{ actionId, rowData, rowId, rowIndex }` |
+| `dt:selectionChange` | row selection changes | `{ selectedIds, selectedData }` |
+| `dt:columnResize` | user resizes a column | `{ columnIndex, newWidth }` |
+| `dt:columnReorder` | column header is dragged | `{ columnOrder }` |
+| `dt:loadingStateChange` | `setLoading` toggles | `{ isLoading }` |
+| `dt:error` | any async or server error | `{ message, error? }` |
+
+---
+
+## 🎨 Styling
+
+The default theme is built with **TailwindCSS** utility classes. You can:
+
+1. Include Tailwind in your build (recommended).  
+2. Swap the utility classes in `src/**/*.ts` with your framework of choice.  
+3. Override styles in your own CSS (see `src/datatable-styles.css` for non‑Tailwind rules such as column resize handles).
+
+---
+
+## 🗺️ Architecture
+
+### Component Graph
+
+```mermaid
+graph TD
+  A[Data source (CSV / REST)] -->|loader| B(DataLoader)
+  B --> C(Core)
+  subgraph Plugins
+    D(Sort)
+    E(Filter)
+    F(Pagination)
+    G(Selection)
+    H(Export)
+    I(Resize\nReorder)
+  end
+  C --> D & E & F & G & H & I
+  C --> J(Renderer)
+  J --> K((DOM))
+```
+
+### Event Flow (simplified)
+
+```mermaid
+sequenceDiagram
+  participant UI
+  participant Table
+  participant Plugins
+  UI->>Table: click column header
+  Table->>Plugins: emit sort request
+  Plugins-->>Table: sorted data
+  Table->>UI: re‑render 🎨
+```
+
+---
+
+## 🛣️ Roadmap & Changelog
+
+### Upcoming 💡
+- Inline editing ✏️  
+- Grouping / aggregation 📊  
+- Multi‑column sort ⇅⇅  
+- Virtual scrolling for massive datasets 🚀  
+- Theming API 🌈  
+
+### 1.0.0 (Mar 2025)
+- First stable release with full client‑side feature set.  
+- Export to CSV/XLSX/PDF.  
+- Column drag‑resize & reorder.  
+- State persistence & next‑page prefetching.
+
+See **[CHANGELOG.md](CHANGELOG.md)** for complete history.
+
+---
+
+## 🖇️ License
+
+Upcomming we will see
