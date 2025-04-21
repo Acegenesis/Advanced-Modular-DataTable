@@ -277,7 +277,7 @@ The default theme is built with **TailwindCSS** utility classes. You can:
 
 ```mermaid
 graph TD
-    A[Data source (CSV / REST)] -->|loader| B(DataLoader)
+    A["Data source (CSV / REST)"] -->|loader| B(DataLoader)
     B --> C(Core)
 
     subgraph Plugins
