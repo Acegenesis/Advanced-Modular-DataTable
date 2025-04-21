@@ -277,19 +277,27 @@ The default theme is built with **TailwindCSS** utility classes. You can:
 
 ```mermaid
 graph TD
-  A[Data source (CSV / REST)] -->|loader| B(DataLoader)
-  B --> C(Core)
-  subgraph Plugins
-    D(Sort)
-    E(Filter)
-    F(Pagination)
-    G(Selection)
-    H(Export)
-    I(Resize\nReorder)
-  end
-  C --> D & E & F & G & H & I
-  C --> J(Renderer)
-  J --> K((DOM))
+    A[Data source (CSV / REST)] -->|loader| B(DataLoader)
+    B --> C(Core)
+
+    subgraph Plugins
+        D(Sort)
+        E(Filter)
+        F(Pagination)
+        G(Selection)
+        H(Export)
+        I["Resize & Reorder"]
+    end
+
+    C --> D
+    C --> E
+    C --> F
+    C --> G
+    C --> H
+    C --> I
+
+    C --> J(Renderer)
+    J --> K((DOM))
 ```
 
 ### Event Flow (simplified)
@@ -329,3 +337,4 @@ See **[CHANGELOG.md](CHANGELOG.md)** for complete history.
 ## 🖇️ License
 
 Upcomming we will see
+
