@@ -6,6 +6,7 @@
     <title>Exemple DataTable Modulaire</title>
     <!-- Assurez-vous d'inclure TailwindCSS ou un autre framework CSS si nécessaire -->
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="src/datatable-styles.css">
     <style>
         /* Styles personnalisés si besoin */
         .dt-row-selected {
@@ -61,7 +62,7 @@
 
         // Colonnes pour la première table
         const columns = [
-            { title: 'ID', type: 'number', sortable: true, width: '80px' }, // Non redimensionnable par défaut
+            { title: 'ID', type: 'number', sortable: false, width: '80px' }, // Non redimensionnable par défaut
             { 
                 title: 'Nom', 
                 type: 'string', 

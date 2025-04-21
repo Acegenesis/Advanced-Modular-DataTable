@@ -40,18 +40,18 @@ Une bibliothèque JavaScript/TypeScript pour créer des tableaux de données int
 
 ## Utilisation Basique
 
-```html
-<!DOCTYPE html>
+    ```html
+    <!DOCTYPE html>
 <html>
-<head>
+    <head>
     <title>DataTable</title>
-    <!-- Inclure CSS (ex: Tailwind) -->
-    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
-</head>
-<body>
+        <!-- Inclure CSS (ex: Tailwind) -->
+        <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    </head>
+    <body>
     <div id="myTable"></div>
 
-    <script type="module">
+        <script type="module">
         import { DataTable } from './dist/index.js'; // Ajustez le chemin
 
         const columns = [
@@ -64,19 +64,19 @@ Une bibliothèque JavaScript/TypeScript pour créer des tableaux de données int
             [1, 'Dupont'],
             [2, 'Martin'],
             // ... autres données
-        ];
+            ];
 
-        const options = {
-            columns: columns,
-            data: data,
-            // ... autres options
-        };
+            const options = {
+                columns: columns,
+                data: data,
+                // ... autres options
+            };
 
         const myDataTable = new DataTable('myTable', options);
-    </script>
-</body>
-</html>
-```
+        </script>
+    </body>
+    </html>
+    ```
 
 ## Options de Configuration (`DataTableOptions`)
 
@@ -222,7 +222,7 @@ Ce README devrait fournir une bonne base. Vous pourrez l'affiner en ajoutant des
 *   **Fonctionnalités Majeures :**
     *   Édition en ligne des cellules.
     *   Regroupement de lignes.
-    *   Tri multi-colonnes.
+*   Tri multi-colonnes.
     *   Rendu virtuel/Scroll infini pour très grands datasets.
 *   **Export Avancé :**
     *   Options de styling pour Excel.

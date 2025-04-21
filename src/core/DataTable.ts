@@ -202,7 +202,7 @@ export class DataTable {
 
         if (this.stateManager.getIsServerSide() && this.options.serverSide?.fetchData) {
              this.fetchData();
-        } else {
+            } else {
             this.render();
         }
          dispatchEvent(this, 'filterChange', { type: 'column', columnIndex, filterState });
@@ -232,7 +232,7 @@ export class DataTable {
             if (this.stateManager.getIsServerSide() && this.options.serverSide?.fetchData) {
                 this.fetchData();
             } else {
-                this.render();
+            this.render();
             }
              dispatchEvent(this, 'filterChange', { type: 'clearAll' });
         }

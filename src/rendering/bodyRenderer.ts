@@ -29,10 +29,15 @@ export function renderStandardBody(instance: DataTable, table: HTMLTableElement,
     data.forEach((row, rowIndex) => {
         const tr = tbody.insertRow();
         tr.setAttribute('role', 'row');
+        // Ajouter les classes pour la transition et le survol
+        tr.className = 'transition-colors duration-150 ease-in-out hover:bg-gray-50';
+        
         const rowId = row[uniqueRowIdColumn as number];
 
         // Appliquer style si la ligne est sélectionnée
         if (selectionEnabled && selectedRowIds.has(rowId)) {
+            // Retirer la classe de survol si sélectionné pour éviter conflit, ajouter la classe de sélection
+            tr.classList.remove('hover:bg-gray-50');
             tr.classList.add('bg-blue-100'); // Example selection style
         }
 

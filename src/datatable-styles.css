@@ -1,0 +1,31 @@
+/* Styles pour l'indicateur de tri de DataTable */
+
+.dt-sort-indicator svg {
+    /* Taille (équivalent h-4 w-4) */
+    height: 1rem;
+    width: 1rem;
+    
+    /* Transition pour la rotation (équivalent transition-transform duration-150 ease-in-out) */
+    transition: transform 0.15s ease-in-out;
+    transform-origin: center;
+    
+    /* État de base "none" (équivalent opacity-40 text-gray-400) */
+    opacity: 0.4;
+    color: #9CA3AF; /* text-gray-400 */
+}
+
+/* État actif (tri asc ou desc) (équivalent opacity-100 text-gray-600) */
+.dt-sort-indicator svg.dt-sort-icon--active {
+    opacity: 1;
+    color: #4B5563; /* text-gray-600 */
+}
+
+/* État descendant (ajoute la rotation) (équivalent rotate-180) */
+.dt-sort-indicator svg.dt-sort-icon--descending {
+    transform: rotate(180deg);
+}
+
+/* Style pour le TH parent lorsque le tri est actif (équivalent bg-gray-100) */
+th.dt-sort-active {
+     background-color: #F3F4F6; /* bg-gray-100 */
+} 

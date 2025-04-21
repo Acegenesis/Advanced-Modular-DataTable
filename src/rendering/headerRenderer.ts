@@ -46,15 +46,15 @@ function createAdvancedTextFilterPopup(instance: DataTable, columnIndex: number,
     const operatorSelect = document.createElement('select');
     operatorSelect.className = 'w-full px-2 py-1 border border-gray-300 rounded-md shadow-sm text-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500';
     operatorSelect.setAttribute('aria-label', 'Type de filtre');
-    const opTextMap: Record<TextFilterOperator, string> = {
-        contains: 'Contient',
-        notContains: 'Ne contient pas',
-        equals: 'Égal à',
-        startsWith: 'Commence par',
-        endsWith: 'Finit par',
-        isEmpty: 'Est vide',
-        isNotEmpty: 'N\'est pas vide'
-    };
+        const opTextMap: Record<TextFilterOperator, string> = {
+            contains: 'Contient',
+            notContains: 'Ne contient pas',
+            equals: 'Égal à',
+            startsWith: 'Commence par',
+            endsWith: 'Finit par',
+            isEmpty: 'Est vide',
+            isNotEmpty: 'N\'est pas vide'
+        };
     operators.forEach(op => {
         const option = document.createElement('option');
         option.value = op;
@@ -882,31 +882,96 @@ function handleDragEnd(event: DragEvent) {
     console.log('[DragEnd]');
 }
 
-// --- Header Rendering Logic ---
+// Helper function to update SVG state
+export function updateSortIndicatorSVG(svgElement: SVGSVGElement | null, parentTh: HTMLElement, sortState: 'ascending' | 'descending' | 'none') {
+    if (!svgElement) return;
+
+    // Retirer les anciennes classes Tailwind (au cas où)
+    svgElement.classList.remove('rotate-0', 'rotate-180', 'opacity-40', 'opacity-100', 'text-gray-400', 'text-gray-600');
+    parentTh.classList.remove('bg-gray-100');
+
+    // Nos nouvelles classes CSS
+    const activeSortClass = 'dt-sort-icon--active';
+    const descendingSortClass = 'dt-sort-icon--descending';
+    const activeThClass = 'dt-sort-active';
+
+    // Reset: enlever les classes spécifiques au tri
+    svgElement.classList.remove(activeSortClass, descendingSortClass);
+    parentTh.classList.remove(activeThClass);
+
+    // Appliquer les classes selon l'état
+    if (sortState === 'ascending') {
+        svgElement.classList.add(activeSortClass);
+        // Pas besoin de classe pour asc, c'est l'état par défaut (rotate(0))
+        parentTh.classList.add(activeThClass);
+    } else if (sortState === 'descending') {
+        svgElement.classList.add(activeSortClass);
+        svgElement.classList.add(descendingSortClass); // Ajoute la rotation
+        parentTh.classList.add(activeThClass);
+    } else { // sortState === 'none'
+        // Aucune classe spécifique à ajouter au SVG ou au TH
+    }
+
+    // Mettre à jour les attributs ARIA (gardé)
+    parentTh.setAttribute('aria-sort', sortState);
+    parentTh.dataset.sort = sortState;
+}
 
 /**
  * Renders the table header (THEAD) including column filters.
+ * Updates the existing THEAD if possible, otherwise creates a new one.
  * @param instance The DataTable instance.
  * @param table The TABLE element.
  */
 export function renderHeader(instance: DataTable, table: HTMLTableElement): void {
     const state = instance.stateManager;
     let thead = table.tHead;
+    let headerRow: HTMLTableRowElement;
+
+    const columnWidths = state.getColumnWidths();
+    const columnOrder = state.getColumnOrder();
+    const currentSortIndexState = state.getSortColumnIndex();
+    const currentSortDirectionState = state.getSortDirection();
+
     if (thead) {
-        table.removeChild(thead);
+        // --- UPDATE MODE --- 
+        console.log('[renderHeader] Updating existing header.');
+        headerRow = thead.rows[0]; 
+        if (!headerRow) { 
+            table.removeChild(thead);
+            thead = null; // Force creation mode
+        } else {
+            // Find existing THs and update indicator SVG classes
+            headerRow.querySelectorAll('th[data-original-index]').forEach(thElement => {
+                const th = thElement as HTMLTableCellElement;
+                const originalIndex = parseInt(th.dataset.originalIndex || '-1', 10);
+                if (originalIndex === -1) return;
+
+                let finalSortState: 'ascending' | 'descending' | 'none' = 'none';
+                if (currentSortIndexState === originalIndex && currentSortDirectionState !== 'none') {
+                    finalSortState = currentSortDirectionState === 'asc' ? 'ascending' : 'descending';
+                }
+                
+                // Find the SVG and update its classes directly
+                const svgElement = th.querySelector('.dt-sort-indicator svg') as SVGSVGElement | null;
+                updateSortIndicatorSVG(svgElement, th, finalSortState);
+            });
+            return; // Update finished, exit the function
+        }
     }
+
+    // --- CREATION MODE --- 
+    console.log('[renderHeader] Creating new header.');
     thead = table.createTHead();
     thead.className = 'bg-gray-50';
     thead.style.position = 'sticky';
     thead.style.top = '0';
     thead.style.zIndex = '10';
 
-    const headerRow = thead.insertRow();
+    headerRow = thead.insertRow();
     headerRow.setAttribute('role', 'row');
 
-    const columnWidths = state.getColumnWidths();
-    const columnOrder = state.getColumnOrder(); // Récupérer l'ordre actuel
-    console.log('[renderHeader] Using column order:', columnOrder);
+    console.log('[renderHeader - Create] Using column order:', columnOrder);
 
     if (state.getSelectionEnabled() && state.getSelectionMode() === 'multiple') {
         const thCheckbox = document.createElement('th');
@@ -925,11 +990,10 @@ export function renderHeader(instance: DataTable, table: HTMLTableElement): void
         thCheckbox.appendChild(instance.selectAllCheckbox);
         headerRow.appendChild(thCheckbox);
         
-        // Correction: Appliquer la largeur ICI, à l'intérieur du if
         const checkboxColWidth = state.getColumnWidths().get(-1); 
         if (checkboxColWidth) {
             thCheckbox.style.width = `${checkboxColWidth}px`;
-            thCheckbox.style.flexGrow = '0'; // Rendre non-flexible
+            thCheckbox.style.flexGrow = '0'; 
             thCheckbox.style.flexShrink = '0';
         }
     }
@@ -937,173 +1001,171 @@ export function renderHeader(instance: DataTable, table: HTMLTableElement): void
     columnOrder.forEach(originalIndex => {
         const columnDef = instance.options.columns[originalIndex];
         if (!columnDef) {
-            console.warn(`[renderHeader] Column definition not found for originalIndex ${originalIndex}. Skipping.`);
-            return; // Safety check
+            console.warn(`[renderHeader - Create] Column definition not found for originalIndex ${originalIndex}. Skipping.`);
+            return;
         }
-
+    
         const th = document.createElement('th');
         th.scope = 'col';
-        th.className = 'px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider whitespace-nowrap overflow-hidden text-ellipsis border-r border-gray-300';
+        th.className = `
+            px-4 py-2 text-left text-xs font-semibold text-gray-600 
+            uppercase tracking-wider whitespace-nowrap overflow-hidden text-ellipsis 
+            border-r border-gray-300
+        `.trim();
         th.style.boxSizing = 'border-box';
         th.style.position = 'relative';
-
-        // *** AJOUTER/VÉRIFIER L'ATTRIBUT ICI ***
-        th.dataset.originalIndex = String(originalIndex); 
-
-        // Apply width from state or definition
+        th.dataset.originalIndex = String(originalIndex);
+    
         const currentWidth = columnWidths.get(originalIndex);
-        if (currentWidth) {
+        if (typeof currentWidth === 'number') {
             th.style.width = `${currentWidth}px`;
-            th.style.minWidth = `${currentWidth}px`; 
+            th.style.minWidth = `${currentWidth}px`;
             th.style.maxWidth = `${currentWidth}px`;
         } else if (columnDef.width) {
             th.style.width = columnDef.width;
-            th.style.minWidth = columnDef.width; 
+            th.style.minWidth = columnDef.width;
         } else {
-            th.style.minWidth = '50px'; 
+            th.style.minWidth = '50px';
         }
-
-        th.style.position = 'relative'; 
-
-        // Make draggable (Event listeners added below)
+    
         th.draggable = true;
         th.addEventListener('dragstart', (e) => handleDragStart(e, originalIndex));
         th.addEventListener('dragover', handleDragOver);
         th.addEventListener('dragleave', handleDragLeave);
         th.addEventListener('drop', (e) => handleDrop(e, instance, originalIndex));
         th.addEventListener('dragend', handleDragEnd);
-
+    
         const cellContentContainer = document.createElement('div');
         cellContentContainer.className = 'flex items-center justify-between h-full';
+    
         const titleContainer = document.createElement('div');
         titleContainer.className = 'flex items-center';
         const titleSpan = document.createElement('span');
         titleSpan.textContent = columnDef.title || '';
         titleContainer.appendChild(titleSpan);
         cellContentContainer.appendChild(titleContainer);
-
+    
         const sortFilterContainer = document.createElement('div');
         sortFilterContainer.className = 'flex items-center space-x-1';
-
-        // --- Sorting UI --- 
+    
         const isSortable = instance.options.sorting?.enabled && columnDef.sortable !== false;
         if (isSortable) {
             th.classList.add('cursor-pointer', 'hover:bg-gray-100', 'transition-colors', 'duration-150');
             th.tabIndex = 0;
             th.setAttribute('aria-roledescription', 'sortable column header');
+    
+            // Crée le span wrapper (simple)
+            const sortIndicatorSpan = document.createElement('span');
+            sortIndicatorSpan.className = 'ml-1 dt-sort-indicator inline-block'; // Plus besoin de classes de transition ici
+    
+            // Création du SVG
+            const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+            svg.setAttribute('viewBox', '0 0 24 24');
+            svg.setAttribute('fill', 'none');
+            svg.setAttribute('stroke', 'currentColor');
+            svg.setAttribute('stroke-width', '2');
+            // SUPPRIMER les classes Tailwind appliquées ici
+            // svg.classList.add('h-4', 'w-4', 'transition-transform', /* 'transition-opacity', */ 'duration-150', 'ease-in-out'); 
+    
+            const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            path.setAttribute('stroke-linecap', 'round');
+            path.setAttribute('stroke-linejoin', 'round');
+            path.setAttribute('d', 'M5 15l7-7 7 7'); // Flèche vers le haut
+            svg.appendChild(path);
+            sortIndicatorSpan.appendChild(svg);
+            sortFilterContainer.appendChild(sortIndicatorSpan);
+    
+            // Définir état initial du tri via la fonction helper
+            let initialSortState: 'ascending' | 'descending' | 'none' = 'none';
+            if (currentSortIndexState === originalIndex && currentSortDirectionState !== 'none') {
+                initialSortState = currentSortDirectionState === 'asc' ? 'ascending' : 'descending';
+            }
+            // Appeler la fonction helper pour mettre les bonnes classes initiales sur le SVG et le TH
+            updateSortIndicatorSVG(svg, th, initialSortState);
+    
+            // Modifier le listener de clic pour appeler update sur TOUS les indicateurs
             th.addEventListener('click', (e) => {
                 const targetElement = e.target as HTMLElement;
-                const isResizeHandle = targetElement.closest('.resizer-handle'); // Utiliser une classe spécifique
+                const isResizeHandle = targetElement.closest('.resizer-handle');
                 const isFilterControl = targetElement.closest('.dt-filter-control');
-
-                // !! AJOUT LOG POUR DEBUG !!
-                console.log(`[TH Click] Target:`, targetElement, `isResizeHandle: ${!!isResizeHandle}, isFilterControl: ${!!isFilterControl}`);
-
                 if (!isResizeHandle && !isFilterControl) {
+                    // 1. Déclencher la logique de tri (qui met à jour l'état et appelle render)
                     handleSortClick(instance, originalIndex);
+                    // 2. Le render appelera renderHeader en mode UPDATE, qui mettra à jour tous les SVG.
                 }
             });
+    
             th.addEventListener('keydown', (event) => {
                 if (event.key === 'Enter' || event.key === ' ') {
                     event.preventDefault();
-                    handleSortClick(instance, originalIndex);
+                    th.click(); // Simuler le clic pour déclencher la mise à jour
                 }
             });
-            const svgUnsorted = `<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 inline-block text-gray-400 group-hover:text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 12L3 8m4 4l4-4m6 8v12m0-12l4 4m-4-4l-4 4" /></svg>`;
-            const svgAsc = `<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 inline-block text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7" /></svg>`;
-            const svgDesc = `<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 inline-block text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /></svg>`;
-            let indicatorSvg = svgUnsorted;
-            let ariaSortValue: "ascending" | "descending" | "none" = "none";
-            const currentSortIndex = state.getSortColumnIndex();
-            const currentSortDirection = state.getSortDirection();
-            if (currentSortIndex === originalIndex && currentSortDirection !== 'none') {
-                indicatorSvg = currentSortDirection === 'asc' ? svgAsc : svgDesc;
-                ariaSortValue = currentSortDirection === 'asc' ? 'ascending' : 'descending';
-                th.classList.add('bg-gray-100');
-            }
-            th.setAttribute('aria-sort', ariaSortValue);
-            const sortIndicatorSpan = document.createElement('span');
-            sortIndicatorSpan.className = 'ml-1 dt-sort-indicator'; // Classe pour ne pas déclencher le tri
-            sortIndicatorSpan.innerHTML = indicatorSvg;
-            sortFilterContainer.appendChild(sortIndicatorSpan);
         }
-
-        // --- Filtering UI --- 
+    
         const isGloballyFilterable = instance.options.columnFiltering?.enabled;
         const filterType = columnDef.filterType;
-
-        // Vérifier si le filtrage est activé et si le type est géré pour une popup
-        if (isGloballyFilterable && filterType && (filterType === 'text' || filterType === 'number' || filterType === 'date' || filterType === 'multi-select')) {
+        if (isGloballyFilterable && filterType && ['text', 'number', 'date', 'multi-select'].includes(filterType)) {
             const currentFilter = state.getColumnFilters().get(originalIndex);
             const filterControlContainer = document.createElement('div');
             filterControlContainer.className = 'dt-filter-control ml-1';
-            
-            // Créer le bouton "entonnoir" pour tous ces types
             const filterButton = document.createElement('button');
             filterButton.type = 'button';
             filterButton.className = 'p-1 text-gray-400 hover:text-gray-600 focus:outline-none focus:ring-1 focus:ring-indigo-500 rounded';
-            // Mettre à jour l'icône en fonction de si un filtre est actif
-            filterButton.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="${currentFilter ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="${currentFilter ? 0 : 1.5}"><path fill-rule="evenodd" d="M3 3a1 1 0 011-1h12a1 1 0 011 1v3a1 1 0 01-.293.707L13 10.414V17a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6.586L3.293 6.707A1 1 0 013 6V3z" clip-rule="evenodd" /></svg>`;
+            filterButton.innerHTML = `
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="${currentFilter ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="${currentFilter ? 0 : 1.5}">
+                    <path fill-rule="evenodd" d="M3 3a1 1 0 011-1h12a1 1 0 011 1v3a1 1 0 01-.293.707L13 10.414V17a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6.586L3.293 6.707A1 1 0 013 6V3z" clip-rule="evenodd" />
+                </svg>
+            `;
             filterButton.setAttribute('aria-label', `Options de filtre pour ${columnDef.title}`);
             filterButton.setAttribute('aria-haspopup', 'true');
-
             filterButton.addEventListener('click', (e) => {
                 e.stopPropagation();
-                // Passer originalIndex aux fonctions de popup
                 switch (filterType) {
-                    case 'text':
-                        createAdvancedTextFilterPopup(instance, originalIndex, columnDef, currentFilter, filterButton); break;
-                    case 'number':
-                        createAdvancedNumberFilterPopup(instance, originalIndex, columnDef, currentFilter, filterButton); break;
-                    case 'date':
-                        createAdvancedDateFilterPopup(instance, originalIndex, columnDef, currentFilter, filterButton); break;
-                    case 'multi-select':
-                         createMultiSelectFilterPopup(instance, originalIndex, columnDef, currentFilter, filterButton); break;
+                    case 'text': createAdvancedTextFilterPopup(instance, originalIndex, columnDef, currentFilter, filterButton); break;
+                    case 'number': createAdvancedNumberFilterPopup(instance, originalIndex, columnDef, currentFilter, filterButton); break;
+                    case 'date': createAdvancedDateFilterPopup(instance, originalIndex, columnDef, currentFilter, filterButton); break;
+                    case 'multi-select': createMultiSelectFilterPopup(instance, originalIndex, columnDef, currentFilter, filterButton); break;
                 }
             });
             filterControlContainer.appendChild(filterButton);
             sortFilterContainer.appendChild(filterControlContainer);
         }
-
+    
         if (sortFilterContainer.hasChildNodes()) {
             cellContentContainer.appendChild(sortFilterContainer);
         }
+    
         th.appendChild(cellContentContainer);
-
-        // --- Ajouter la poignée de redimensionnement AU TH
-        if (columnDef.resizable === true) { 
+    
+        if (columnDef.resizable === true) {
             const resizer = document.createElement('div');
             resizer.className = 'absolute top-0 right-0 h-full w-4 cursor-col-resize z-30 resizer-handle';
-            // Commentez/Décommentez pour debug visuel
-            // resizer.style.backgroundColor = 'rgba(255, 0, 0, 0.3)'; 
             resizer.style.userSelect = 'none';
-            resizer.style.cursor = 'col-resize'; 
+            resizer.style.cursor = 'col-resize';
             resizer.addEventListener('mousedown', (e) => {
-                 e.stopPropagation(); 
-                 handleMouseDown(e, instance, originalIndex);
+                e.stopPropagation();
+                handleMouseDown(e, instance, originalIndex);
             });
-            // Ajout écouteur double-clic
             resizer.addEventListener('dblclick', (e) => {
                 handleDoubleClickResize(e, instance, originalIndex);
             });
-            th.appendChild(resizer); 
+            th.appendChild(resizer);
         }
-
+    
         headerRow.appendChild(th);
     });
-
+    
     if (instance.options.rowActions && instance.options.rowActions.length > 0) {
         const thActions = document.createElement('th');
         thActions.scope = 'col';
         thActions.className = 'px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider';
         thActions.textContent = 'Actions';
         headerRow.appendChild(thActions);
-
-        // Correction: Appliquer la largeur ICI, à l'intérieur du if
         const actionsColWidth = state.getColumnWidths().get(-2);
         if (actionsColWidth) {
             thActions.style.width = `${actionsColWidth}px`;
-             thActions.style.flexGrow = '0'; // Rendre non-flexible
+             thActions.style.flexGrow = '0'; 
              thActions.style.flexShrink = '0';
         }
     }

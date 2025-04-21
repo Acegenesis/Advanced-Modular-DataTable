@@ -1,6 +1,10 @@
 import { DataTable } from "../core/DataTable";
 import { SortDirection } from "../core/types";
 import { dispatchEvent, dispatchSortChangeEvent } from "../events/dispatcher";
+import { renderStandardBody } from "../rendering/bodyRenderer";
+import { renderPaginationControls, getCurrentPageData } from "./pagination";
+import { applyFilters } from "./filtering";
+import { updateSortIndicatorSVG } from "../rendering/headerRenderer";
 
 // --- Sorting Feature ---
 
@@ -51,23 +55,59 @@ export function sortDataIfEnabled(instance: DataTable, dataToSort: any[][]): any
 export function handleSortClick(instance: DataTable, columnIndex: number): void {
     const state = instance.stateManager;
     const columnDef = instance.options.columns[columnIndex];
-    if (!instance.options.sorting?.enabled || !columnDef || columnDef.sortable === false) {
+    const table = instance.element.querySelector('table');
+    if (!instance.options.sorting?.enabled || !columnDef || columnDef.sortable === false || !table?.tHead) {
          return;
     }
 
+    const previousSortColumnIndex = state.getSortColumnIndex();
+    const previousSortDirection = state.getSortDirection();
+
     let newDirection: SortDirection;
-    if (state.getSortColumnIndex() === columnIndex) {
-        newDirection = state.getSortDirection() === 'asc' ? 'desc' : 'asc';
+    if (previousSortColumnIndex === columnIndex) {
+        newDirection = previousSortDirection === 'asc' ? 'desc' : 'asc';
     } else {
         newDirection = 'asc';
     }
+    
+    const newSortColumnIndex = columnIndex;
 
-    state.setSort(columnIndex, newDirection);
+    console.log(`[handleSortClick] Col ${columnIndex}: Prev=${previousSortDirection}, New=${newDirection}`);
+
+    state.setSort(newSortColumnIndex, newDirection);
     state.setCurrentPage(1);
+
+    const headerRow = table.tHead.rows[0];
+    if (headerRow) {
+        headerRow.querySelectorAll('th[data-original-index]').forEach(thElement => {
+            const th = thElement as HTMLTableCellElement;
+            const thOriginalIndex = parseInt(th.dataset.originalIndex || '-1', 10);
+            if (thOriginalIndex === -1) return;
+
+            const svgElement = th.querySelector('.dt-sort-indicator svg') as SVGSVGElement | null;
+            let indicatorState: 'ascending' | 'descending' | 'none' = 'none';
+
+            if (thOriginalIndex === newSortColumnIndex) {
+                indicatorState = newDirection === 'asc' ? 'ascending' : 'descending';
+            }
+            
+            updateSortIndicatorSVG(svgElement, th, indicatorState);
+        });
+    }
 
     dispatchSortChangeEvent(instance);
 
     if (!state.getIsServerSide()) {
-         instance.render();
+        console.log('[handleSortClick] Updating body & pagination (client-side)');
+        const originalClientData = state.getOriginalData();
+        const filteredData = applyFilters(instance, originalClientData);
+        const sortedData = sortDataIfEnabled(instance, filteredData);
+        const totalRows = sortedData.length;
+        const dataForBodyRender = getCurrentPageData(instance, sortedData);
+
+        renderStandardBody(instance, table, dataForBodyRender);
+        renderPaginationControls(instance, totalRows);
+    } else {
+        console.log('[handleSortClick] Server-side: State updated. Waiting for new data.');
     }
 } 
