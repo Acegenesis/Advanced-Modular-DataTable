@@ -58,9 +58,9 @@
 
 ```bash
 # 1. Install Package & Dependencies
-npm install advanced-datatable exceljs jspdf jspdf-autotable 
+npm install advanced-datatable exceljs jspdf jspdf-autotable papaparse
 # or
-yarn add advanced-datatable exceljs jspdf jspdf-autotable
+yarn add advanced-datatable exceljs jspdf jspdf-autotable papaparse
 
 # 2. Build / Dev Server (Assuming you have build scripts)
 npm run build       # Example: compiles TS -> /dist
@@ -70,7 +70,7 @@ npm run dev         # Example: starts dev server with live-reload
 # Example via CDN (for demos): <link href="https://cdn.jsdelivr.net/npm/tailwindcss@^3/dist/tailwind.min.css" rel="stylesheet">
 ```
 
-> **Note**: `exceljs`, `jspdf`, `jspdf-autotable` are required for the Excel and PDF export functionalities.
+> **Note**: `exceljs`, `jspdf`, `jspdf-autotable` are required for the Excel and PDF export functionalities. `papaparse` is used internally for robust CSV parsing if you use the `loadFromCSV` method.
 
 ---
 
@@ -308,32 +308,101 @@ interface DataTableOptions {
 
 ## 🔌 Programmatic API
 
-L'instance `DataTable` expose plusieurs méthodes pour interagir avec la table après son initialisation.
+La `DataTable` expose plusieurs méthodes pour interagir avec elle par programmation.
 
-```ts
-const table = new DataTable("el", options);
+| Method                       | Parameters                                      | Description                                                                 |
+| :--------------------------- | :---------------------------------------------- | :-------------------------------------------------------------------------- |
+| `render()`                   | `columnOrderOverride?: number[]`                | Redessine la table. Peut prendre un ordre de colonnes personnalisé.        |
+| `destroy()`                  |                                                 | Détruit l'instance de la table et nettoie les éléments du DOM.                |
+| `setData()`                  | `rows: any[][]`                                 | Remplace les données actuelles de la table par celles fournies et redessine. |
+| `addRow()`                   | `row: any[]`                                    | Ajoute une nouvelle ligne de données à la table et redessine.                   |
+| `deleteRowById()`            | `id: string \| number`                          | Supprime une ligne par son ID unique et redessine.                            |
+| `updateRowById()`            | `id: string \| number, data: any[]`             | Met à jour les données d'une ligne par son ID unique et redessine.           |
+| `goToPage()`                 | `page: number`                                  | Navigue vers la page spécifiée.                                              |
+| `setSort()`                  | `colIndex: number \| null, dir: SortDirection`  | Applique un tri sur la colonne spécifiée.                                    |
+| `fetchData()`                |                                                 | (Server-side) Déclenche manuellement la récupération des données.           |
+| `getSelectedRowData()`       |                                                 | Retourne les données des lignes actuellement sélectionnées.                     |
+| `getSelectedRowIds()`        |                                                 | Retourne les IDs des lignes actuellement sélectionnées.                      |
+| `setSelectedRowIds()`        | `ids: any[]`                                    | Définit les lignes sélectionnées par programmation.                         |
+| `setLoading()`               | `isLoading: boolean`                            | Affiche ou masque l'indicateur de chargement.                               |
+| `clearAllFilters()`          |                                                 | Efface tous les filtres (globaux et par colonne) et redessine.             |
+| `loadFromCSV()`              | `csvString: string, options?: LoadCsvOptions`   | **Nouveau**: Charge les données à partir d'une chaîne CSV. Utilise PapaParse en interne. |
+| `DataTable.extractCsvHeader()`| `csvString: string, config?: Papa.ParseConfig`| **Nouveau (Statique)**: Extrait la 1ère ligne (en-tête) d'un CSV.            |
 
-// Exemples
-table.setLoading(true); // Affiche l'overlay de chargement
-table.setData(newDataArray); // Remplace les données (client-side)
-table.goToPage(3); // Navigue vers la page 3
-table.setSort(1, 'desc'); // Trie la 2ème colonne (index 1) en descendant
-table.setColumnFilter(2, { value: 'Alice', operator: 'contains' }); // Filtre la 3ème colonne
-table.clearAllFilters(); // Efface recherche globale et filtres de colonne
-table.setSelectedRowIds([101, 105]); // Sélectionne des lignes par leur ID
-const selected = table.getSelectedRowIds(); // Récupère les IDs sélectionnés
+### **Nouvelles Méthodes de Chargement CSV**
 
-table.render(); // Force un re-rendu complet
-table.destroy(); // Nettoie l'instance et le DOM
+#### `dataTable.loadFromCSV(csvString: string, options?: LoadCsvOptions)`
+
+Cette méthode d'instance permet de charger des données directement à partir d'une chaîne de caractères au format CSV. Elle utilise la bibliothèque [PapaParse](https://www.papaparse.com/) en interne pour une analyse robuste des données CSV, gérant correctement les délimiteurs, les guillemets, et les sauts de ligne.
+
+**Paramètres :**
+
+*   `csvString: string`: La chaîne de caractères contenant les données CSV.
+*   `options?: LoadCsvOptions` (optionnel): Un objet pour configurer le processus de chargement.
+    *   `csvIncludesHeader?: boolean`: Si `true`, la première ligne de la chaîne CSV sera traitée comme une ligne d'en-tête et ne sera pas incluse dans les données de la table. (Défaut: `false`)
+    *   `papaParseConfig?: Papa.ParseConfig`: Un objet de configuration PapaParse pour surcharger les options de parsing par défaut (ex: `skipEmptyLines: true`, `dynamicTyping: true`). Consultez la [documentation de PapaParse](https://www.papaparse.com/docs#config) pour toutes les options.
+
+Après le parsing, cette méthode appelle `setData()` en interne pour mettre à jour la table.
+
+#### `DataTable.extractCsvHeader(csvString: string, papaParseConfig?: Papa.ParseConfig): string[] | null`
+
+Il s'agit d'une méthode **statique** utilitaire qui peut être appelée directement sur la classe `DataTable`. Elle est utile pour extraire la première ligne (généralement la ligne d'en-tête) d'une chaîne CSV sans instancier une table complète. Cela peut être utilisé pour dynamiquement configurer les `ColumnDefinition` de votre table avant de charger les données.
+
+**Paramètres :**
+
+*   `csvString: string`: La chaîne de caractères contenant les données CSV.
+*   `papaParseConfig?: Papa.ParseConfig` (optionnel): Un objet de configuration PapaParse. Par défaut, elle est configurée pour lire uniquement la première ligne (`preview: 1`).
+
+**Retourne :** Un tableau de chaînes (`string[]`) représentant les cellules de l'en-tête, ou `null` si l'en-tête ne peut pas être lu ou est vide.
+
+**Exemple d'utilisation combinée :**
+
+```javascript
+// Supposons que vous avez récupéré votre chaîne CSV dans la variable 'myCsvString'
+// Et que vous avez une instance de DataTable: const myTable = new DataTable('myTableElement', initialOptions);
+
+async function loadCsvDataIntoTable(csvString, tableInstance) {
+  // 1. Extraire l'en-tête pour configurer les colonnes (si nécessaire)
+  const headerRow = DataTable.extractCsvHeader(csvString);
+
+  if (headerRow) {
+    const newColumns = headerRow.map(headerText => ({
+      title: headerText,
+      field: headerText.toLowerCase().replace(/\\s+/g, '_'), // Logique de base pour générer un 'field'
+      sortable: true,
+      searchable: true,
+      // ... autres options de colonne basées sur l'en-tête ou des règles métier
+    }));
+    
+    // Mettre à jour les colonnes de la table si elle est déjà initialisée
+    // (Note: La DataTable actuelle pourrait nécessiter une méthode pour mettre à jour les colonnes post-initialisation,
+    // ou alors, initialiser la table avec ces colonnes et des données vides avant loadFromCSV)
+    // Pour l'exemple, supposons que vous initialisez la table avec ces colonnes:
+    // const table = new DataTable('elementId', { columns: newColumns, data: [] });
+    // Ou si la table existe déjà et supporte la mise à jour de colonnes :
+    // tableInstance.setColumns(newColumns); // Méthode hypothétique
+    
+    console.log("Colonnes configurées à partir de l'en-tête CSV:", newColumns);
+    // Pour cet exemple, nous allons juste afficher les colonnes
+    // et supposer que la table est initialisée avec des colonnes correspondantes.
+  } else {
+    console.warn("Impossible d'extraire l'en-tête du CSV.");
+    // Utiliser des colonnes par défaut ou gérer l'erreur
+  }
+
+  // 2. Charger les données CSV dans la table
+  //    (en supposant que la première ligne du CSV est bien l'en-tête)
+  tableInstance.loadFromCSV(csvString, { csvIncludesHeader: true });
+  
+  console.log("Données CSV chargées dans la table.");
+}
+
+// Exemple d'appel (après avoir récupéré votre chaîne CSV):
+// const csvStringFromServer = "ID,Nom,Email\\n1,Dupont,jean@test.com\\n2,Martin,alice@test.com";
+// const myDataTable = new DataTable('myTableContainer', { columns: [...] }); // Initialisez avec des colonnes
+// loadCsvDataIntoTable(csvStringFromServer, myDataTable);
 ```
-
-| Catégorie | Méthodes Principales |
-|:--|:--|
-| **Données** | `setData`, `addRow`, `updateRowById`, `deleteRowById` |
-| **État (Pagination, Tri, Filtre)** | `goToPage`, `setSort`, `setColumnFilter`, `clearAllFilters`, `setFilterTerm` |
-| **Sélection** | `setSelectedRowIds`, `getSelectedRowIds`, `getSelectedRowData` |
-| **Affichage & Cycle de Vie** | `render`, `setLoading`, `destroy` |
-| **État Interne (Getters)** | `getState` (accès à l'objet `StateManager`), `getDisplayedData` |
+> **Note :** L'exemple ci-dessus montre le concept. Pour une mise à jour dynamique des colonnes après l'initialisation de la table, votre classe `DataTable` pourrait nécessiter une méthode dédiée comme `setColumns()`. Actuellement, il est préférable de définir les colonnes lors de l'initialisation, puis de charger les données.
 
 ---
 

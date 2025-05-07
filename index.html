@@ -8,18 +8,9 @@
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
     <link rel="stylesheet" href="src/datatable-styles.css">
     <style>
-        /* Styles personnalisés si besoin */
-        .dt-row-selected {
-            /* Style pour les lignes sélectionnées (facultatif, peut être géré par les classes ajoutées) */
-            /* background-color: #e0e7ff; /* Exemple: indigo-100 */
-        }
         body {
             padding: 2rem;
         }
-        /* *** SUPPRIMÉ: Hauteur fixe pour le conteneur *** */
-        /* #myTableContainer {
-            height: 500px; 
-        } */
     </style>
 </head>
 <body>
@@ -317,86 +308,9 @@
             });
         }
 
-        // --- Configuration de la deuxième table ---
-        /*
-        // Nouvel élément div pour la deuxième table
-        const container2 = document.createElement('div');
-        container2.id = 'datatable2';
-        container2.className = 'mt-8'; // Ajoute un peu d'espace au-dessus
-        document.querySelector('#myTableContainer2').appendChild(container2);
-
-        // Titre pour la deuxième table
-        const title2 = document.createElement('h2');
-        title2.textContent = 'Deuxième DataTable (Scores et Dates)';
-        title2.className = 'text-xl font-semibold mb-4';
-        container2.before(title2); // Insère le titre avant la table
-
-        // Colonnes pour la deuxième table
-        const columns2 = [
-            { title: 'ID', sortable: true, width: '50px' },
-            { 
-                title: 'Produit', 
-                filterType: 'text',
-                searchable: true
-            },
-            { 
-                title: 'Score', 
-                type: 'number', 
-                sortable: true, 
-                filterType: 'number', // Filtre nombre
-                filterOperators: ['equals', 'greaterThan', 'lessThan', 'between', 'isEmpty', 'isNotEmpty']
-            },
-            {
-                title: 'Date Inscription',
-                type: 'string', // Laisser en string pour l'affichage simple, mais utiliser filterType date
-                sortable: true,
-                filterType: 'date', // Filtre date
-                filterOperators: ['equals', 'notEquals', 'after', 'before', 'between', 'isEmpty', 'isNotEmpty']
-            }
-        ];
-        
-        // Données pour la deuxième table (avec dates et nombres variés)
-        const data2 = [
-            [1, 'Pomme', 150, '2023-01-15'],
-            [2, 'Banane', null, '2023-03-22'], // Score null
-            [3, 'Orange', 80, '2023-01-15'],
-            [4, 'Fraise', 200, '2024-05-10'],
-            [5, 'Kiwi', 110, ''], // Date vide
-            [6, 'Mangue', 150, '2024-01-20'],
-            [7, 'Poire', 80, null], // Date null
-            [8, 'Raisin', 180, '2023-11-30']
-        ];
-
-        // Options pour la deuxième table
-        const options2 = {
-            columns: columns2,
-            data: data2,
-            pagination: { enabled: true, rowsPerPage: 4 },
-            sorting: { enabled: true },
-            searching: { enabled: true },
-             columnFiltering: { 
-                enabled: true,
-                showClearButton: true 
-            },
-            stateManagement: { persist: true },
-            // exporting: false // Optionnellement désactiver pour cette table
-        };
-
-        // Initialisation de la deuxième table
-        const table2 = new DataTable('datatable2', options2);
-
-        // --- Initialisation de la table depuis large_data.csv --- 
-
-        // Fonction pour parser le CSV (simple)
-        function parseCsv(csvString) {
-            const rows = [];
-            const lines = csvString.trim().split(/\r?\n/);
-            for (const line of lines) {
-                if (line.trim() === '') continue;
-                rows.push(line.split(','));
-            }
-            return rows;
-        }
+        // --- EXEMPLE 3: Initialisation de la table depuis large_data.csv --- 
+        // Cet exemple charge les données depuis le fichier large_data.csv (généré par main.py)
+        // et initialise une DataTable avec ces données en utilisant la méthode loadFromCSV du module.
 
         // Charger et initialiser la table CSV
         async function initCsvTable() {
@@ -406,98 +320,115 @@
                     throw new Error(`Erreur HTTP ${response.status} lors du chargement de large_data.csv`);
                 }
                 const csvText = await response.text();
-                const parsedData = parseCsv(csvText);
+                
+                // Utiliser la méthode statique de DataTable pour extraire l'en-tête
+                const headerRow = DataTable.extractCsvHeader(csvText);
 
-                if (parsedData.length > 1) {
-                    const header = parsedData[0]; // ID,Nom,Email,Valeur,Date
-                    const dataRows = parsedData.slice(1);
-                    
-                    console.log(`Données CSV chargées: ${dataRows.length} lignes.`);
-
-                    // Définir les colonnes basées sur l'en-tête (ou manuellement)
-                    const csvColumns = header.map((title, index) => {
-                        let colOptions = { title: title, sortable: true, searchable: true };
-                        // Ajouter des options spécifiques si nécessaire
-                        if (title === 'ID' || title === 'Valeur') {
-                            colOptions.type = 'number';
-                            colOptions.filterType = 'number';
-                        } else if (title === 'Email') {
-                             colOptions.type = 'mail';
-                             colOptions.filterType = 'text';
-                        } else if (title === 'Date') {
-                             colOptions.type = 'string'; // Garder string car format YYYY-MM-DD
-                             colOptions.filterType = 'date'; // Mais permettre filtre date
-                        } else { // Nom
-                             colOptions.type = 'string';
-                             colOptions.filterType = 'text';
-                        }
-                        return colOptions;
-                    });
-
-                    // Options pour la table CSV
-                    const csvOptions = {
-                        columns: csvColumns,
-                        data: dataRows,
-                        pagination: {
-                            enabled: true,
-                            rowsPerPage: 50, // Mettre plus de lignes par page par défaut
-                            rowsPerPageOptions: [10, 25, 50, 100, 250, 500],
-                            style: 'numbered-jump'
-                        },
-                        sorting: { enabled: true },
-                        searching: { enabled: true },
-                        columnFiltering: { enabled: true, showClearButton: true },
-                        stateManagement: { persist: false } // Ne pas persister l'état pour cette grande table par défaut
-                    };
-                    
-                    // Titre pour la table CSV
-                    const titleCsv = document.createElement('h2');
-                    titleCsv.textContent = 'DataTable chargée depuis large_data.csv (6000 lignes)';
-                    titleCsv.className = 'text-xl font-semibold mb-4';
-                    document.getElementById('csvTableContainer').before(titleCsv);
-
-                    // Initialisation de la table CSV
-                    const csvTable = new DataTable('csvTableContainer', csvOptions);
-                    console.log("Table CSV initialisée.");
-
-                } else {
-                    console.error('Le fichier large_data.csv est vide ou ne contient pas de données après l\'en-tête.');
-                     document.getElementById('csvTableContainer').innerHTML = '<p class="text-red-500">Erreur: Impossible de charger les données depuis large_data.csv.</p>';
+                if (!headerRow) {
+                    console.error("Erreur lors de l'extraction de l'en-tête CSV depuis le module DataTable ou en-tête vide.");
+                    const csvContainer = document.getElementById('csvTableContainer');
+                    if (csvContainer) {
+                         csvContainer.innerHTML = `<p class="text-red-500">Erreur lors de la lecture de l'en-tête du fichier CSV.</p>`;
+                    }
+                    return;
                 }
+                                
+                console.log("En-tête CSV détecté (via DataTable.extractCsvHeader):", headerRow);
+
+                // Définir les colonnes basées sur l'en-tête
+                const csvColumns = headerRow.map((title, index) => {
+                    let colOptions = { title: title, sortable: true, searchable: true, resizable: true };
+                    if (title === 'ID' || title === 'Valeur') {
+                        colOptions.type = 'number';
+                        colOptions.filterType = 'number';
+                    } else if (title === 'Email') {
+                         colOptions.type = 'mail';
+                         colOptions.filterType = 'text';
+                    } else if (title.toLowerCase().includes('date')) {
+                         colOptions.type = 'string';
+                         colOptions.filterType = 'date';
+                    } else {
+                         colOptions.type = 'string';
+                         colOptions.filterType = 'text';
+                    }
+                    // Assigner un 'field' basé sur le titre ou l'index si les données sont des tableaux de tableaux
+                    // Pour que cela fonctionne avec uniqueRowIdColumn, il faut des objets avec des clés.
+                    // Ou alors, loadFromCSV devrait transformer les lignes en objets si uniqueRowIdColumn est un string.
+                    // Pour l'instant, on suppose que this.options.columns définit la structure, et loadFromCSV charge des arrays.
+                    // Si les données CSV sont des tableaux, alors field doit correspondre à l'index.
+                    // MAIS, notre DataTable prendra les données brutes de PapaParse (tableaux de tableaux) via setData.
+                    // Donc, pour les fonctionnalités comme le tri par field, il est mieux de travailler avec des index ou de transformer les données.
+                    // Pour l'instant, uniqueRowIdColumnIndex est plus approprié si les données restent des arrays.
+                    // Laissons field comme titre pour référence, mais le tri/filtrage se basera sur l'index de la colonne.
+                    colOptions.field = title.toLowerCase().replace(/\s+/g, '_'); // Créer un field probable
+                    return colOptions;
+                });
+
+                // Options pour la table CSV
+                const csvOptions = {
+                    columns: csvColumns,
+                    data: [], // Initialiser avec des données vides, elles seront chargées par loadFromCSV
+                    uniqueRowIdColumnIndex: 0, // Important si les données sont des tableaux de tableaux
+                    pagination: {
+                        enabled: true,
+                        rowsPerPage: 50,
+                        rowsPerPageOptions: [10, 25, 50, 100, 250, 500],
+                        style: 'numbered-jump'
+                    },
+                    sorting: { enabled: true },
+                    searching: { enabled: true },
+                    columnFiltering: { enabled: true, showClearButton: true },
+                    stateManagement: { persist: false },
+                    scrollWrapperMaxHeight: '600px'
+                };
+                
+                const csvContainer = document.getElementById('csvTableContainer');
+                if (!csvContainer) {
+                    console.error("Le conteneur #csvTableContainer n'a pas été trouvé.");
+                    return;
+                }
+                csvContainer.innerHTML = ''; // Nettoyer au cas où il y aurait un message d'erreur précédent
+
+                // Titre pour la table CSV
+                const titleCsv = document.createElement('h2');
+                // Le nombre de lignes sera inconnu ici, la DataTable le gérera en interne.
+                titleCsv.textContent = `Exemple 3: DataTable chargée depuis large_data.csv (via module DataTable)`;
+                titleCsv.className = 'text-xl font-semibold mt-8 mb-2';
+                csvContainer.before(titleCsv);
+
+                // Initialisation de la table CSV
+                const csvTable = new DataTable('csvTableContainer', csvOptions);
+                console.log("Table CSV (objet) initialisée, appel de loadFromCSV...");
+
+                // Charger les données CSV via la nouvelle méthode du module
+                csvTable.loadFromCSV(csvText, { 
+                    csvIncludesHeader: true, 
+                    // Optionnel: surcharger la config PapaParse si besoin
+                    // papaParseConfig: { delimiter: ';' } 
+                });
+                console.log("loadFromCSV appelée sur l'instance csvTable.");
 
             } catch (error) {
-                console.error("Erreur lors de l'initialisation de la table CSV:", error);
-                document.getElementById('csvTableContainer').innerHTML = `<p class="text-red-500">Erreur lors du chargement de large_data.csv: ${error.message}</p>`;
+                console.error("Erreur lors de l'initialisation de la table CSV (catch général initCsvTable):", error);
+                const csvContainer = document.getElementById('csvTableContainer');
+                if (csvContainer) {
+                    csvContainer.innerHTML = `<p class="text-red-500">Erreur lors du chargement de large_data.csv: ${error.message}</p>`;
+                }
             }
         }
 
         // Appeler l'initialisation de la table CSV
         initCsvTable();
 
-        */
-        // --- Début: Ajout du Deuxième Exemple (Virtual Scroll) ---
-
-        // Ajouter un titre pour la deuxième table
+        // --- EXEMPLE 2: Virtual Scroll (1000 lignes) ---
+        // (Note: L'exemple précédent était numéroté 3 pour suivre l'ordre dans le HTML)
+        // Titre pour la table de défilement virtuel
         const headingVirtual = document.createElement('h2');
-        headingVirtual.textContent = 'Exemple 2: Virtual Scroll (1000 lignes)';
+        headingVirtual.textContent = 'Exemple 2: DataTable Standard (1000 lignes)'; // Titre mis à jour
         headingVirtual.className = 'text-xl font-semibold mt-8 mb-2';
         const containerVirtual = document.getElementById('myTableContainer2');
         if (containerVirtual && containerVirtual.parentNode) {
             containerVirtual.parentNode.insertBefore(headingVirtual, containerVirtual);
-        }
-
-        // --- Styles CSS pour le conteneur du virtual scroll ---
-        // Vérifier si le style existe déjà pour éviter duplication
-        if (!document.getElementById('virtual-scroll-style')) {
-            const styleTagVirtual = document.createElement('style');
-            styleTagVirtual.id = 'virtual-scroll-style'; // ID pour éviter duplication
-            styleTagVirtual.textContent = `
-                #myTableContainer2 {
-                    height: 400px; /* Hauteur fixe pour le viewport du virtual scroll */
-                    border: 1px solid #ccc;
-                }
-            `;
-            document.head.appendChild(styleTagVirtual);
         }
 
         // --- Données et Configuration pour la Table Virtual Scroll ---
@@ -510,26 +441,81 @@
 
         // Colonnes simples pour la table virtual scroll
         const columnsVirtual = [
-            { title: 'ID', type: 'number', sortable: true, width: '100px' }, // Index 0
-            { title: 'Catégorie', type: 'string', sortable: true },       // Index 1
-            { title: 'Valeur', type: 'number', sortable: true },          // Index 2
-            { title: 'Statut', type: 'string', sortable: true }           // Index 3
+            { title: 'ID', field: 'id', type: 'number', sortable: true, width: '100px', resizable: true },
+            { 
+                title: 'Catégorie', 
+                field: 'categorie', 
+                type: 'string', 
+                sortable: true, 
+                searchable: true, 
+                filterType: 'text', // Ou 'multi-select' si les catégories sont connues et limitées
+                filterPlaceholder: 'Filtrer Catégorie...',
+                resizable: true 
+            },
+            { 
+                title: 'Valeur', 
+                field: 'valeur', 
+                type: 'number', 
+                sortable: true, 
+                searchable: true, 
+                filterType: 'number',
+                filterOperators: ['equals', 'notEquals', 'greaterThan', 'lessThan', 'between'],
+                resizable: true 
+            },
+            { 
+                title: 'Statut', 
+                field: 'statut', 
+                type: 'string', 
+                sortable: true, 
+                searchable: true,
+                filterType: 'multi-select', // Pourrait être 'text' ou 'multi-select'
+                filterOptions: ['Validé', 'En attente'], // Nécessaire pour multi-select
+                resizable: true,
+                render: (data, row, columnDef, cellElement) => {
+                    const statusClass = {
+                        'Validé': "bg-green-100 text-green-800",
+                        'En attente': "bg-yellow-100 text-yellow-800"
+                    }[data] || "bg-gray-100 text-gray-800";
+
+                    cellElement.textContent = '';
+                    const badge = document.createElement('span');
+                    badge.className = `inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusClass}`;
+                    badge.textContent = data;
+                    cellElement.appendChild(badge);
+                }
+            }
         ];
 
         // Options pour la table virtual scroll
         const optionsVirtual = {
             columns: columnsVirtual,
             data: dataVirtual,
-            uniqueRowIdColumnIndex: 0,
+            uniqueRowIdColumn: 'id', // Changé de uniqueRowIdColumnIndex
             virtualScroll: {
-                enabled: true,
-                rowHeight: 35
+                enabled: false, // Désactivé
+                // rowHeight: 35 // Plus nécessaire
             },
-            pagination: { enabled: false },
+            pagination: { 
+                enabled: true, 
+                rowsPerPage: 10, 
+                rowsPerPageOptions: [10, 25, 50, 100, 250], 
+                style: 'numbered-jump' 
+            },
             sorting: { enabled: true },
-            searching: { enabled: false },
-            selection: { enabled: false },
-            columnFiltering: { enabled: false }
+            searching: { enabled: true }, // Activé
+            selection: { enabled: true, mode: 'multiple' }, // Activé
+            columnFiltering: { enabled: true, showClearButton: true }, // Activé
+            exporting: { // Activé
+                csv: true,
+                excel: true,
+                pdf: true
+            },
+            rowActions: [ // Ajouté
+                { label: 'Voir Détail', actionId: 'view_detail_virtual' },
+                { label: 'Approuver', actionId: 'approve_virtual', className: 'text-green-500' }
+            ],
+            stateManagement: { persist: true }, // Ajouté pour parité
+            scrollWrapperMaxHeight: '500px' // Ajouté pour parité
         };
 
         // --- Initialisation de la Table Virtual Scroll ---
@@ -544,7 +530,30 @@
             console.error("Erreur lors de l'initialisation de DataTable 2:", error);
         }
 
-        // --- Fin: Ajout du Deuxième Exemple ---
+        // Optionnel: Ajouter un ColumnVisibilityController pour la deuxième table
+        if (typeof ColumnVisibilityController !== 'undefined' && containerVirtual && typeof tableVirtual !== 'undefined') {
+            const visibilityBreakpointsVirtual = {
+                sm: ['id', 'categorie'],
+                md: ['+', 'valeur'],
+                lg: ['+']
+            };
+            const visibilityController2 = new ColumnVisibilityController(tableVirtual, visibilityBreakpointsVirtual);
+            console.log("DataTable 2 initialisé avec contrôleur de visibilité !");
+        }
+        
+        // Optionnel: Écouteur d'événements pour les actions de la deuxième table
+        if (typeof tableVirtual !== 'undefined' && tableVirtual.el) {
+            tableVirtual.el.addEventListener('dt:actionClick', (e) => {
+                const detail = e.detail;
+                console.log('Action cliquée sur Table 2:', detail);
+                if (detail.actionId === 'view_detail_virtual') {
+                    alert(`Détail de la ligne ID ${detail.rowId} de la Table 2.`);
+                } else if (detail.actionId === 'approve_virtual') {
+                    alert(`Ligne ID ${detail.rowId} de la Table 2 marquée comme approuvée (simulation).`);
+                    // Ici, vous pourriez mettre à jour la donnée et rafraîchir la table ou la ligne
+                }
+            });
+        }
 
     </script>
 

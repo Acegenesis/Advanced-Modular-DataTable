@@ -7,6 +7,21 @@ import { renderVirtualBody, renderStandardBody } from "../rendering/bodyRenderer
 import { renderToolbar } from "../rendering/toolbarRenderer";
 import { renderPaginationControls } from "../features/pagination";
 import { throttle } from "../utils/throttle";
+import Papa from 'papaparse';
+
+/* -------------------------------------------------------------------------- */
+/*                               Interfaces                                   */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Options pour la méthode loadFromCSV.
+ */
+export interface LoadCsvOptions {
+  /** Options de configuration pour PapaParse. */
+  papaParseConfig?: Papa.ParseConfig;
+  /** Indique si la première ligne du CSV est un en-tête de colonnes et doit être ignorée pour les données. */
+  csvIncludesHeader?: boolean;
+}
 
 /* -------------------------------------------------------------------------- */
 /*                               Default options                              */
@@ -24,6 +39,44 @@ const DEFAULT_OPTIONS: DataTableOptions = {
 };
 
 export class DataTable {
+  /* ------------------------------------------------------------------------ */
+  /* Static Utility Methods                                                   */
+  /* ------------------------------------------------------------------------ */
+
+  /**
+   * Extrait la première ligne (en-tête) d'une chaîne CSV en utilisant PapaParse.
+   * @param csvString La chaîne de caractères contenant les données CSV.
+   * @param papaParseConfig Options de configuration optionnelles pour PapaParse.
+   * @returns Un tableau de chaînes représentant les cellules de l'en-tête, ou null en cas d'erreur ou si l'en-tête est vide.
+   */
+  public static extractCsvHeader(csvString: string, papaParseConfig?: Papa.ParseConfig): string[] | null {
+    const defaultConfig: Papa.ParseConfig = {
+      skipEmptyLines: true,
+      preview: 1, // Lire seulement la première ligne
+      header: false, // Traiter la première ligne comme un tableau de données
+    };
+
+    const config = { 
+      ...defaultConfig, 
+      ...(papaParseConfig || {}) 
+    };
+
+    try {
+      const parseResult = Papa.parse(csvString, config);
+      if (parseResult.errors && parseResult.errors.length > 0) {
+        console.error("[DataTable.extractCsvHeader] Erreurs de parsing CSV:", parseResult.errors);
+        return null;
+      }
+      if (parseResult.data && parseResult.data.length > 0 && (parseResult.data[0] as string[]).length > 0) {
+        return (parseResult.data[0] as string[]).map(String); // Assurer que tous les éléments sont des chaînes
+      }
+      return null; // En-tête vide ou non trouvé
+    } catch (error) {
+      console.error("[DataTable.extractCsvHeader] Exception lors du parsing de l'en-tête CSV:", error);
+      return null;
+    }
+  }
+
   /* ------------------------------------------------------------------------ */
   /* Public state                                                             */
   /* ------------------------------------------------------------------------ */
@@ -615,6 +668,53 @@ export class DataTable {
       dispatchEvent(this, 'filterChange', { type: 'clearAll' });
         } else {
         console.log("[clearAllFilters] No filters were active to clear, no redraw needed.");
+    }
+  }
+
+  /* ------------------------------------------------------------------------ */
+  /* Data Manipulation & API                                                  */
+  /* ------------------------------------------------------------------------ */
+
+  /**
+   * Charge les données dans la table à partir d'une chaîne CSV.
+   * @param csvString La chaîne de caractères contenant les données CSV.
+   * @param options Options pour le chargement et le parsing du CSV.
+   */
+  public loadFromCSV(csvString: string, options?: LoadCsvOptions): void {
+    const defaultConfig: Papa.ParseConfig = {
+      skipEmptyLines: true,
+      dynamicTyping: true, // Essaye de convertir les types automatiquement
+      header: false, // Important: nous traitons les en-têtes séparément si nécessaire
+    };
+
+    const papaConfig = { 
+      ...defaultConfig, 
+      ...(options?.papaParseConfig || {}) 
+    };
+
+    const parseResult = Papa.parse(csvString, papaConfig);
+
+    if (parseResult.errors && parseResult.errors.length > 0) {
+      console.error("[DataTable loadFromCSV] Erreurs de parsing CSV:", parseResult.errors);
+      // Gérer les erreurs, par exemple en lançant une exception ou en affichant un message
+      dispatchEvent(this, "error", { 
+        message: "Erreur lors du parsing du fichier CSV.", 
+        details: parseResult.errors 
+      });
+      return;
+    }
+
+    let dataToLoad = parseResult.data as any[][];
+
+    if (options?.csvIncludesHeader && dataToLoad.length > 0) {
+      dataToLoad = dataToLoad.slice(1); // Retire la ligne d'en-tête des données à charger
+    }
+
+    if (dataToLoad) {
+      this.setData(dataToLoad);
+    } else {
+      console.warn("[DataTable loadFromCSV] Aucune donnée à charger après le parsing du CSV.");
+      this.setData([]); // Charger un tableau vide si rien n'est parsé
     }
   }
 }

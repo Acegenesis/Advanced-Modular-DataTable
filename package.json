@@ -21,6 +21,7 @@
   "license": "MIT",
   "devDependencies": {
     "@types/exceljs": "^0.5.3",
+    "@types/papaparse": "^5.3.14",
     "esbuild": "^0.25.2",
     "typescript": "^5.0.0"
   },
@@ -30,6 +31,7 @@
   "dependencies": {
     "exceljs": "^4.4.0",
     "jspdf": "^3.0.1",
-    "jspdf-autotable": "^5.0.2"
+    "jspdf-autotable": "^5.0.2",
+    "papaparse": "^5.4.1"
   }
 }
