@@ -36,6 +36,9 @@ export class StateManager {
     private persistStateOptions: { persist?: boolean; prefix?: string };
 
     constructor(options: DataTableOptions, initialData?: any[][], elementId?: string) {
+        // Log 1: Options reçues par StateManager
+        console.log("[StateManager Constructor] Options reçues:", JSON.stringify(options));
+
         this.options = options;
         this.persistStateOptions = options.stateManagement || {};
 
@@ -92,33 +95,33 @@ export class StateManager {
         // Initialiser la visibilité par défaut (tout visible)
         this.visibleColumns = new Set(options.columns.map((_, index) => index));
 
-        // --- Charger l'état sauvegardé (écrase certaines valeurs initiales) ---
-        this._loadState();
+        // --- Charger l'état sauvegardé APRÈS l'initialisation de base ---
+        // Cela assure que les valeurs initiales existent avant d'être potentiellement écrasées
+        this._loadState(); 
+
+        // --- Ajustements Post-Chargement --- 
         // Note: La visibilité n'est PAS persistée pour l'instant pour rester simple.
-        // On la réinitialise toujours à tout visible au chargement.
+        // On la réinitialise toujours à tout visible au chargement (même si l'état chargé existe).
         this.visibleColumns = new Set(options.columns.map((_, index) => index));
 
-        // --- Données (après chargement état pour pagination/tri initial) ---
-        if (this.isServerSide) {
-            this.totalRows = options.serverSideTotalRows ?? 0;
-            this.displayedData = this.originalData;
-        } else {
-            this.totalRows = this.originalData.length;
+        // S'assurer que totalRows est correct (important si pas en mode serveur et l'état chargé a changé la page/filtres)
+        if (!this.isServerSide) {
+             // Recalculer totalRows pourrait être nécessaire ici si les filtres chargés affectent le total,
+             // mais pour l'instant, on suppose que originalData est la source de vérité pour le total initial.
+             this.totalRows = this.originalData.length;
         }
 
         // Si l'état chargé n'avait pas d'ordre (ancienne version), s'assurer qu'il est initialisé
-        if (this.columnOrder.length !== options.columns.length) {
+        if (!this.columnOrder || this.columnOrder.length !== options.columns.length) {
              this.columnOrder = options.columns.map((_, index) => index);
              // Optionnel: sauvegarder immédiatement ce nouvel ordre par défaut?
              // this._saveState(); 
         }
 
-        // Initialiser les largeurs depuis les options si présentes (en pixels)
+        // Initialiser les largeurs depuis les options si présentes (après _loadState pour que l'état chargé ait priorité)
         options.columns.forEach((col, index) => {
-            if (col.width) {
-                // Tenter de convertir la largeur initiale en pixels
-                // Note: Ceci est basique, ne gère pas %, em, etc.
-                // Idéalement, on lirait la largeur calculée après le premier rendu.
+            // Appliquer la largeur initiale seulement si aucune largeur n'a été chargée depuis l'état
+            if (col.width && !this.columnWidths.has(index)) {
                 const widthPx = parseInt(col.width, 10);
                 if (!isNaN(widthPx)) {
                      this.columnWidths.set(index, widthPx);

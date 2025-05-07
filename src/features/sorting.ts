@@ -15,7 +15,7 @@ import { updateSortIndicatorSVG } from "../rendering/headerRenderer";
  * @returns The sorted data array.
  */
 export function sortDataIfEnabled(instance: DataTable, dataToSort: any[][]): any[][] {
-    const state = instance.stateManager;
+    const state = instance.state;
     if (!instance.options.sorting?.enabled || state.getSortColumnIndex() === null || state.getSortDirection() === 'none') {
         return dataToSort;
     }
@@ -53,9 +53,9 @@ export function sortDataIfEnabled(instance: DataTable, dataToSort: any[][]): any
  * @param columnIndex The index of the clicked column.
  */
 export function handleSortClick(instance: DataTable, columnIndex: number): void {
-    const state = instance.stateManager;
+    const state = instance.state;
     const columnDef = instance.options.columns[columnIndex];
-    const table = instance.element.querySelector('table');
+    const table = instance.el.querySelector('table');
     if (!instance.options.sorting?.enabled || !columnDef || columnDef.sortable === false || !table?.tHead) {
          return;
     }
@@ -106,7 +106,11 @@ export function handleSortClick(instance: DataTable, columnIndex: number): void 
         const dataForBodyRender = getCurrentPageData(instance, sortedData);
 
         renderStandardBody(instance, table, dataForBodyRender);
-        renderPaginationControls(instance, totalRows);
+        if (instance.paginationContainer) {
+            renderPaginationControls(instance, totalRows, instance.paginationContainer);
+        } else {
+            console.warn(`[handleSortClick] Pagination container not found for table ${instance.el.id}. Cannot update pagination.`);
+        }
     } else {
         console.log('[handleSortClick] Server-side: State updated. Waiting for new data.');
     }

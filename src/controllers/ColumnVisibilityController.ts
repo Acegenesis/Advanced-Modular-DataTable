@@ -26,6 +26,12 @@ export class ColumnVisibilityController {
     private listener: () => void;
 
     constructor(instance: DataTable, config: BreakpointConfig) {
+        // Log 1: Vérifier l'instance et son état au début du constructeur
+        console.log("[CVC Constructor] Received instance:", instance);
+        console.log("[CVC Constructor] Received instance.state:", instance.state);
+        if (!instance) console.error("[CVC Constructor] CRITICAL: instance is NULL or UNDEFINED!");
+        if (!instance.state) console.error("[CVC Constructor] CRITICAL: instance.state is NULL or UNDEFINED!");
+
         this.instance = instance;
         this.config = config;
 
@@ -130,10 +136,29 @@ export class ColumnVisibilityController {
     }
 
     private _updateVisibility(): void {
-        const targetVisibleSet = this._calculateTargetVisibleColumns();
-        const stateManager = this.instance.stateManager;
+        console.log("[_updateVisibility] Called. this.instance:", this.instance);
+        console.log("[_updateVisibility] Called. this.instance.state:", this.instance.state);
+        if (!this.instance) console.error("[_updateVisibility] CRITICAL: this.instance is NULL or UNDEFINED!");
+        if (!this.instance.state) console.error("[_updateVisibility] CRITICAL: this.instance.state is NULL or UNDEFINED!");
 
-        if (stateManager.setVisibleColumns(targetVisibleSet)) {
+        const targetVisibleSet = this._calculateTargetVisibleColumns();
+        const stateManager = this.instance.state; // Utiliser instance.state
+
+        console.log("[_updateVisibility] About to call setVisibleColumns on stateManager:", stateManager);
+        if (!stateManager) {
+            console.error("[_updateVisibility] CRITICAL: stateManager (derived from instance.state) is NULL or UNDEFINED before calling setVisibleColumns!");
+            return;
+        }
+        
+        // Log 4: Vérifier si setVisibleColumns est une fonction
+        if (typeof stateManager.setVisibleColumns !== 'function') {
+             console.error("[_updateVisibility] CRITICAL: stateManager.setVisibleColumns is NOT a function!", stateManager);
+             return;
+        }
+        console.log("[_updateVisibility] stateManager.setVisibleColumns IS a function. Calling it...");
+
+        // Appel qui cause l'erreur si stateManager est undefined
+        if (stateManager.setVisibleColumns(targetVisibleSet)) { 
             console.log('[ColumnVisibilityController] Visibility changed, triggering render...');
             this.instance.render();
         } 

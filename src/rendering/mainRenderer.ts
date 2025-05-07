@@ -31,7 +31,7 @@ function formatFilterValueForDisplay(value: any, columnDef?: ColumnDefinition): 
 
 // --- Fonction pour rendre les indicateurs de filtres actifs ---
 function renderActiveFilters(instance: DataTable, container: HTMLElement): void {
-    const state = instance.stateManager;
+    const state = instance.state;
     container.innerHTML = '';
     let hasActiveFilters = false;
 
@@ -42,7 +42,7 @@ function renderActiveFilters(instance: DataTable, container: HTMLElement): void 
         const badge = createFilterBadge(
             `Recherche: "${globalFilterTerm}"`,
             () => { 
-                instance.stateManager.setFilterTerm('');
+                instance.state.setFilterTerm('');
                 instance.render();
             } 
         );
@@ -66,7 +66,7 @@ function renderActiveFilters(instance: DataTable, container: HTMLElement): void 
             const badge = createFilterBadge(
                 text,
                 () => {
-                    instance.stateManager.setColumnFilter(columnIndex, null);
+                    instance.state.setColumnFilter(columnIndex, null);
                     instance.render();
                 }
             );
@@ -108,16 +108,16 @@ function createFilterBadge(text: string, onRemove: () => void): HTMLElement {
  * @param instance The DataTable instance.
  */
 export function render(instance: DataTable): void {
-    const state = instance.stateManager;
+    const state = instance.state;
     console.log('[Render START]');
 
-    const existingTable = instance.element.querySelector('table') as HTMLTableElement | null;
-    const existingMainContainer = instance.element.querySelector('.dt-main-container') as HTMLElement | null;
-    const existingToolbarContainer = instance.element.querySelector('.dt-toolbar-container') as HTMLElement | null;
-    const existingTableContainer = instance.element.querySelector('.dt-table-container') as HTMLElement | null;
-    const existingPaginationContainer = instance.element.querySelector('.dt-pagination-container') as HTMLElement | null;
-    const existingActiveFiltersContainer = instance.element.querySelector(`#${instance.element.id}-active-filters`) as HTMLElement | null;
-    const existingOverlay = instance.element.querySelector('.dt-loading-overlay') as HTMLElement | null;
+    const existingTable = instance.el.querySelector('table') as HTMLTableElement | null;
+    const existingMainContainer = instance.el.querySelector('.dt-main-container') as HTMLElement | null;
+    const existingToolbarContainer = instance.el.querySelector('.dt-toolbar-container') as HTMLElement | null;
+    const existingTableContainer = instance.el.querySelector('.dt-table-container') as HTMLElement | null;
+    const existingPaginationContainer = instance.el.querySelector('.dt-pagination-container') as HTMLElement | null;
+    const existingActiveFiltersContainer = instance.el.querySelector(`#${instance.el.id}-active-filters`) as HTMLElement | null;
+    const existingOverlay = instance.el.querySelector('.dt-loading-overlay') as HTMLElement | null;
 
     // 1. Data Preparation (fait avant le rendu DOM, que ce soit création ou mise à jour)
     let dataForBodyRender: any[][];
@@ -167,9 +167,9 @@ export function render(instance: DataTable): void {
     // --- CREATION MODE --- 
     console.log('[Render] Creating new elements...');
     
-    Array.from(instance.element.children).forEach(child => {
+    Array.from(instance.el.children).forEach(child => {
         if (!child.classList.contains('dt-loading-overlay')) {
-            instance.element.removeChild(child);
+            instance.el.removeChild(child);
         }
     });
 
@@ -178,7 +178,7 @@ export function render(instance: DataTable): void {
 
     // Active Filters Container
     const activeFiltersContainer = document.createElement('div');
-    activeFiltersContainer.id = `${instance.element.id}-active-filters`;
+    activeFiltersContainer.id = `${instance.el.id}-active-filters`;
     activeFiltersContainer.className = 'mb-3 flex flex-wrap items-center';
     renderActiveFilters(instance, activeFiltersContainer);
     mainContainer.appendChild(activeFiltersContainer);
@@ -213,7 +213,7 @@ export function render(instance: DataTable): void {
         exportDropdownContainer.className = 'relative inline-block text-left';
         const exportButton = document.createElement('button');
         exportButton.type = 'button';
-        exportButton.id = `${instance.element.id}-export-button`;
+        exportButton.id = `${instance.el.id}-export-button`;
         exportButton.textContent = 'Exporter'; 
         // --- Remplacement SVG --- 
         const svgExport = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -221,7 +221,7 @@ export function render(instance: DataTable): void {
         svgExport.setAttribute('fill', 'currentColor');
         
         // Conditionnel: <use> ou <path>
-        if (instance.useSpriteDropdown) {
+        if (instance.options.icons?.dropdown) {
             const useExport = document.createElementNS('http://www.w3.org/2000/svg', 'use');
             const iconDropdownId = instance.options.icons?.dropdown || 'icon-chevron-down';
             useExport.setAttributeNS('http://www.w3.org/1999/xlink', 'href', `#${iconDropdownId}`);
@@ -241,7 +241,7 @@ export function render(instance: DataTable): void {
         exportButton.setAttribute('aria-haspopup', 'true');
         exportButton.setAttribute('aria-expanded', 'false');
         const exportDropdownMenu = document.createElement('div');
-        exportDropdownMenu.id = `${instance.element.id}-export-menu`;
+        exportDropdownMenu.id = `${instance.el.id}-export-menu`;
         exportDropdownMenu.className = 'origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 focus:outline-none hidden z-20';
         exportDropdownMenu.setAttribute('role', 'menu');
         exportDropdownMenu.setAttribute('aria-orientation', 'vertical');
@@ -318,11 +318,11 @@ export function render(instance: DataTable): void {
     
     mainContainer.appendChild(paginationContainer);
 
-    instance.element.appendChild(mainContainer);
+    instance.el.appendChild(mainContainer);
     
     // Re-append overlay if it existed
     if (existingOverlay) {
-         instance.element.appendChild(existingOverlay);
+         instance.el.appendChild(existingOverlay);
     }
 
     console.log('[Render CREATE finished]');

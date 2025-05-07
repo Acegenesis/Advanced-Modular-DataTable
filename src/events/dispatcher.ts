@@ -21,13 +21,20 @@ import { SortDirection, TextFilterOperator, ColumnFilterState } from "../core/ty
 export function dispatchEvent<DetailType = any>(instance: DataTable, eventName: string, detail?: DetailType): void {
     const prefixedEventName = eventName.startsWith('dt:') ? eventName : `dt:${eventName}`;
     console.log(`Dispatching event: ${prefixedEventName}`, detail);
-    // Utiliser CustomEvent<DetailType> si on veut typer l'accès à e.detail dans les écouteurs
+    
+    // Log final pour vérifier instance.el juste avant l'appel natif
+    console.log(`[dispatchEvent] About to call native dispatchEvent. instance.el is:`, instance.el);
+    if (!instance.el) {
+        console.error("[dispatchEvent] CRITICAL: instance.el became null or undefined just before native dispatchEvent!");
+        return; // Ne pas essayer d'appeler dispatchEvent sur undefined
+    }
+
     const event = new CustomEvent<DetailType>(prefixedEventName, {
         detail: detail,
         bubbles: true,
         cancelable: true
     });
-    instance.element.dispatchEvent(event);
+    instance.el.dispatchEvent(event);
 }
 
 // --- Specific Event Dispatchers --- (Ne plus être génériques)
@@ -37,8 +44,8 @@ export function dispatchEvent<DetailType = any>(instance: DataTable, eventName: 
  */
 export function dispatchPageChangeEvent(instance: DataTable): void {
     dispatchEvent(instance, 'pageChange', {
-        currentPage: instance.stateManager.getCurrentPage(),
-        rowsPerPage: instance.stateManager.getRowsPerPage()
+        currentPage: instance.state.getCurrentPage(),
+        rowsPerPage: instance.state.getRowsPerPage()
     });
 }
 
@@ -46,7 +53,7 @@ export function dispatchPageChangeEvent(instance: DataTable): void {
  * Dispatch l'événement de changement de sélection.
  */
 export function dispatchSelectionChangeEvent(instance: DataTable): void {
-    const selectedIds = Array.from(instance.stateManager.getSelectedRowIds());
+    const selectedIds = Array.from(instance.state.getSelectedRowIds());
     dispatchEvent(instance, 'selectionChange', { selectedIds });
 }
 
@@ -55,8 +62,8 @@ export function dispatchSelectionChangeEvent(instance: DataTable): void {
  */
 export function dispatchSortChangeEvent(instance: DataTable): void {
      dispatchEvent(instance, 'sortChange', {
-         sortColumnIndex: instance.stateManager.getSortColumnIndex(),
-         sortDirection: instance.stateManager.getSortDirection()
+         sortColumnIndex: instance.state.getSortColumnIndex(),
+         sortDirection: instance.state.getSortDirection()
      });
 }
 
@@ -65,7 +72,7 @@ export function dispatchSortChangeEvent(instance: DataTable): void {
  */
 export function dispatchSearchEvent(instance: DataTable): void {
     dispatchEvent(instance, 'search', {
-        searchTerm: instance.stateManager.getFilterTerm()
+        searchTerm: instance.state.getFilterTerm()
     });
 }
 

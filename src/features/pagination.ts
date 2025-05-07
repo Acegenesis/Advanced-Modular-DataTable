@@ -1,5 +1,4 @@
 import { DataTable } from "../core/DataTable";
-import { dispatchPageChangeEvent } from "../events/dispatcher";
 import { PaginationStyle } from "../core/types";
 
 // --- Pagination Feature ---
@@ -11,7 +10,7 @@ import { PaginationStyle } from "../core/types";
  * @returns The data array for the current page.
  */
 export function getCurrentPageData(instance: DataTable, sourceData: any[][]): any[][] {
-    const state = instance.stateManager;
+    const state = instance.state;
     if (!instance.options.pagination?.enabled || state.getIsServerSide()) {
         return sourceData;
     }
@@ -29,7 +28,7 @@ export function getCurrentPageData(instance: DataTable, sourceData: any[][]): an
  * Crée un bouton de pagination individuel.
  */
 function createPageButton(instance: DataTable, pageNumber: number, isCurrent: boolean = false, content?: string): HTMLButtonElement {
-    const state = instance.stateManager;
+    const state = instance.state;
     const button = document.createElement('button');
     button.innerHTML = content ?? pageNumber.toString();
     
@@ -81,11 +80,27 @@ function createEllipsisElement(): HTMLSpanElement {
  * @param targetContainer The HTMLElement where the controls should be rendered.
  */
 export function renderPaginationControls(instance: DataTable, displayRowCount: number, targetContainer: HTMLElement): void {
-    const state = instance.stateManager;
-    
-    targetContainer.innerHTML = ''; 
+    // Log 1: Début de renderPaginationControls
+    console.log(`[renderPaginationControls START] Called for table ${instance.el.id}. Display row count: ${displayRowCount}`);
 
+    // Log 2: Vérifier existence instance.state
+    if (!instance.state) {
+        console.error("[renderPaginationControls CRITICAL ERROR] instance.state is UNDEFINED or NULL!");
+        return; // Stop rendering if state is not available
+    }
+    console.log("[renderPaginationControls] instance.state exists. Proceeding...");
+
+    const state = instance.state;
     const paginationOptions = instance.options.pagination;
+    
+    // Cacher la pagination si le virtual scroll est activé
+    if (instance.options.virtualScroll?.enabled) {
+        targetContainer.style.display = 'none';
+        return;
+    }
+
+    targetContainer.innerHTML = ''; 
+    
     if (!paginationOptions?.enabled) {
         targetContainer.style.display = 'none';
         return;
@@ -93,9 +108,20 @@ export function renderPaginationControls(instance: DataTable, displayRowCount: n
         targetContainer.style.display = '';
     }
 
+    // Log 3: Vérifier méthodes state AVANT appel
+    if (typeof state.getCurrentPage !== 'function' || typeof state.getRowsPerPage !== 'function' || typeof state.getTotalRows !== 'function') {
+        console.error("[renderPaginationControls CRITICAL ERROR] Une des méthodes de state (getCurrentPage, getRowsPerPage, getTotalRows) n'est pas une fonction! State:", state);
+        return;
+    }
+    console.log("[renderPaginationControls] state methods (getCurrentPage, getRowsPerPage, getTotalRows) seem OK. Calling them...");
+
     const currentTotalRows = state.getTotalRows();
     const rowsPerPage = state.getRowsPerPage();
     const currentPage = state.getCurrentPage();
+
+    // Log 4: Valeurs récupérées depuis state
+    console.log(`[renderPaginationControls] State values: currentPage=${currentPage}, rowsPerPage=${rowsPerPage}, totalRows=${currentTotalRows}, displayRowCount=${displayRowCount}`);
+
     const totalPages = Math.ceil(displayRowCount / rowsPerPage);
     const startItem = displayRowCount === 0 ? 0 : (currentPage - 1) * rowsPerPage + 1;
     const endItem = Math.min(startItem + rowsPerPage - 1, displayRowCount);
@@ -104,7 +130,7 @@ export function renderPaginationControls(instance: DataTable, displayRowCount: n
     let prevContent: string;
     let nextContent: string;
 
-    if (instance.useSpritePagePrev) {
+    if (instance.spriteAvailable.pagePrev) {
         const iconPrevId = instance.options.icons?.pagePrev || 'icon-page-prev';
         prevContent = `<svg class="h-5 w-5" fill="currentColor" aria-hidden="true"><use href="#${iconPrevId}"></use></svg>`;
     } else {
@@ -112,7 +138,7 @@ export function renderPaginationControls(instance: DataTable, displayRowCount: n
         prevContent = `<svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>`;
     }
 
-    if (instance.useSpritePageNext) {
+    if (instance.spriteAvailable.pageNext) {
         const iconNextId = instance.options.icons?.pageNext || 'icon-page-next';
         nextContent = `<svg class="h-5 w-5" fill="currentColor" aria-hidden="true"><use href="#${iconNextId}"></use></svg>`;
     } else {
@@ -132,11 +158,11 @@ export function renderPaginationControls(instance: DataTable, displayRowCount: n
         const selectorContainer = document.createElement('div');
         selectorContainer.className = 'flex items-center text-sm text-gray-700';
         const selectorLabel = document.createElement('label');
-        selectorLabel.htmlFor = `${instance.element.id}-rows-per-page`;
+        selectorLabel.htmlFor = `${instance.el.id}-rows-per-page`;
         selectorLabel.textContent = 'Lignes par page:';
         selectorLabel.className = 'mr-2';
         const selector = document.createElement('select');
-        selector.id = `${instance.element.id}-rows-per-page`;
+        selector.id = `${instance.el.id}-rows-per-page`;
         selector.name = 'rows-per-page';
         selector.className = 'border border-gray-300 rounded-md shadow-sm px-2 py-1 text-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500';
         selector.setAttribute('aria-label', 'Choisir le nombre de lignes par page');
@@ -150,10 +176,21 @@ export function renderPaginationControls(instance: DataTable, displayRowCount: n
             selector.appendChild(option);
         });
         selector.addEventListener('change', (event) => {
-            const newRowsPerPage = parseInt((event.target as HTMLSelectElement).value, 10);
+            const target = event.target as HTMLSelectElement;
+            const newRowsPerPage = parseInt(target.value, 10);
+            console.log(`[RowsPerPage] Change event: selected value="${target.value}", parsed=${newRowsPerPage}`);
             if (!isNaN(newRowsPerPage) && newRowsPerPage > 0) {
-                state.setRowsPerPage(newRowsPerPage);
-                instance.goToPage(1);
+                try {
+                    console.log(`[RowsPerPage] Setting rowsPerPage to ${newRowsPerPage}. Current page before: ${instance.state.getCurrentPage()}`);
+                    state.setRowsPerPage(newRowsPerPage);
+                    console.log(`[RowsPerPage] State rowsPerPage is now: ${instance.state.getRowsPerPage()}. Calling goToPage(1)...`);
+                    instance.goToPage(1);
+                    console.log(`[RowsPerPage] goToPage(1) called. Current page after: ${instance.state.getCurrentPage()}`);
+                } catch(error) {
+                    console.error("[RowsPerPage] Error during update:", error);
+                }
+            } else {
+                console.warn(`[RowsPerPage] Invalid value selected: ${target.value}`);
             }
         });
         selectorContainer.appendChild(selectorLabel);
@@ -165,6 +202,7 @@ export function renderPaginationControls(instance: DataTable, displayRowCount: n
     infoContainer.className = 'text-sm text-gray-700';
     infoContainer.setAttribute('aria-live', 'polite');
     const p = document.createElement('p');
+    console.log(`[renderPaginationControls] About to set innerHTML for 'p'. p exists: ${!!p}, displayRowCount: ${displayRowCount}, startItem: ${startItem}, endItem: ${endItem}`);
     if (displayRowCount > 0) {
         p.innerHTML = `Affichage <span class="font-medium text-gray-900">${startItem}</span> à <span class="font-medium text-gray-900">${endItem}</span> sur <span class="font-medium text-gray-900">${displayRowCount}</span> résultats`;
     } else {
@@ -266,4 +304,5 @@ export function renderPaginationControls(instance: DataTable, displayRowCount: n
     targetContainer.appendChild(leftContainer);
     targetContainer.appendChild(rightContainer);
     targetContainer.className = 'py-2 px-4 flex items-center justify-between border-t border-gray-200';
+    console.log("[renderPaginationControls END]"); // Log 5
 } 

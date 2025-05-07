@@ -12,7 +12,7 @@ import { getCurrentPageData } from "./pagination";
  * @param isChecked The new checked state.
  */
 export function handleSelectAllClick(instance: DataTable, isChecked: boolean): void {
-    const state = instance.stateManager;
+    const state = instance.state;
     if (!state.getSelectionEnabled() || state.getSelectionMode() !== 'multiple') return;
 
     const allRelevantData = getCurrentFilteredSortedData(instance);
@@ -39,7 +39,7 @@ export function handleSelectAllClick(instance: DataTable, isChecked: boolean): v
  * @param isChecked The new checked state.
  */
 export function handleRowCheckboxClick(instance: DataTable, rowId: any, isChecked: boolean): void {
-    const state = instance.stateManager;
+    const state = instance.state;
     if (!state.getSelectionEnabled()) return;
 
     // 1. Update state
@@ -70,7 +70,7 @@ export function handleRowCheckboxClick(instance: DataTable, rowId: any, isChecke
  * @param instance The DataTable instance.
  */
 export function updateSelectAllCheckboxState(instance: DataTable): void {
-    const state = instance.stateManager;
+    const state = instance.state;
     if (!instance.selectAllCheckbox || !state.getSelectionEnabled() || state.getSelectionMode() !== 'multiple') return;
 
     // Cast l'instance et les données pour l'appel interne si nécessaire
@@ -108,13 +108,25 @@ export function updateSelectAllCheckboxState(instance: DataTable): void {
  * Used for select-all logic and potentially external API access.
  */
 export function getCurrentFilteredSortedData(instance: DataTable): any[][] {
-    const state = instance.stateManager;
-    if (state.getIsServerSide()) {
+    // Utilisation de l'optional chaining et du nullish coalescing pour la sécurité
+    if (instance.state?.getIsServerSide()) {
         console.warn('getCurrentFilteredSortedData is client-side oriented and returns only current page data in server-side mode.');
-        return state.getDisplayedData();
+        // Retourne les données affichées s'il y en a, sinon un tableau vide
+        return instance.state.getDisplayedData() ?? [];
     }
-    const originalData = state.getOriginalData();
-    if (!originalData) return [];
+    const originalData = instance.state?.getOriginalData();
+    if (!originalData) {
+        // S'il n'y a pas de données originales (ou si state est null), retourner un tableau vide
+        return [];
+    }
+
+    // Vérifier l'état avant le filtrage et le tri
+    if (!instance.state) {
+        console.error("ERREUR: instance.state est undefined dans getCurrentFilteredSortedData! Retour des données originales non filtrées/non triées.");
+        return originalData; // Retourne les données originales si l'état n'est pas prêt
+    }
+
+    // L'état est défini, nous pouvons procéder au filtrage et au tri
     const filteredData = applyFilters(instance, originalData);
     const sortedData = sortDataIfEnabled(instance, filteredData);
     return sortedData;
@@ -125,7 +137,7 @@ export function getCurrentFilteredSortedData(instance: DataTable): any[][] {
  * Note: In server-side mode, this might only return data for the current page.
  */
 export function getSelectedRowData(instance: DataTable): any[][] {
-    const state = instance.stateManager;
+    const state = instance.state;
     const allRelevantData = getCurrentFilteredSortedData(instance);
     const selectedIds = state.getSelectedRowIds();
     return allRelevantData.filter(rowData => selectedIds.has(rowData[0]));

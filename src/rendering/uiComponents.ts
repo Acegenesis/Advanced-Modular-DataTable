@@ -17,7 +17,7 @@ export function renderActionButtons(instance: DataTable, rowElement: HTMLTableRo
     if (!actions || actions.length === 0) {
         return null;
     }
-    const state = instance.stateManager;
+    const state = instance.state;
     const uniqueRowIdColumn = instance.options.uniqueRowIdColumn ?? 0;
     const rowId = rowData[uniqueRowIdColumn as number];
 

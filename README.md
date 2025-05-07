@@ -17,7 +17,8 @@
 ## 📚 Table of Contents  
 - [Key Features](#key-features)  
 - [Quick Start](#quick-start)  
-- [Basic Usage](#basic-usage)  
+- [Basic Usage](#basic-usage)
+- [Server-Side Processing Example](#server-side-processing-example)
 - [Configuration Options](#configuration-options)  
 - [Programmatic API](#programmatic-api)  
 - [Custom Events](#custom-events)  
@@ -32,8 +33,8 @@
 
 | | Feature | Description |
 |:-:|:--|:--|
-| 🔢 | **Tabular Rendering** | Virtualised, blazing‑fast rendering of **large data sets**. |
-| ↕️ | **Client‑Side Sorting** | Single or multi‑column sort with visual indicators. |
+| 🔢 | **Efficient Rendering** | Optimized rendering of data sets.
+| ↕️ | **Client‑Side Sorting** | Single-column sort with visual indicators.
 | 🔍 | **Global Search** | Instant, debounce‑controlled fuzzy search across all rows. |
 | 🧩 | **Per‑Column Filters** | Text, number, date & multi‑select pop‑ups with advanced operators. |
 | 📄 | **Pagination** | Simple, numbered or **numbered‑jump** modes with pre‑fetching of the next page. |
@@ -53,7 +54,7 @@
 
 ## ⚡ Quick Start
 
-```bash
+    ```bash
 # 1. Install
 npm install advanced-datatable
 
@@ -71,23 +72,23 @@ open examples/index.html     # or serve ./examples via any static server
 
 ## 🏗️ Basic Usage
 
-```html
-<!DOCTYPE html>
+    ```html
+    <!DOCTYPE html>
 <html lang="en">
-<head>
+    <head>
   <meta charset="UTF-8" />
   <title>Advanced DataTable</title>
   <link href="https://cdn.jsdelivr.net/npm/tailwindcss@^3/dist/tailwind.min.css" rel="stylesheet" />
   <!-- Optional: SVG sprite with your custom icons -->
   <!-- <svg style="display:none"> … </svg> -->
-</head>
+    </head>
 <body class="p-6 bg-gray-50">
   <div id="usersTable"></div>
 
-  <script type="module">
+        <script type="module">
     import { DataTable } from "./dist/index.js";
 
-    const columns = [
+        const columns = [
       { title: "ID",   type: "number" },
       { title: "Name", type: "string" },
       { title: "Email",type: "mail",  textAlign: "left" },
@@ -111,10 +112,156 @@ open examples/index.html     # or serve ./examples via any static server
     });
 
     table.on("dt:actionClick", ({ detail }) => console.log("Clicked", detail));
-  </script>
-</body>
-</html>
+        </script>
+    </body>
+    </html>
+    ```
+
+---
+
+## 📡 Server-Side Processing Example
+
+When dealing with very large datasets, you can switch to server-side processing to handle pagination, sorting, filtering, and searching on your backend.
+
+**1. Frontend Configuration (`DataTableOptions`):**
+
+```javascript
+import { DataTable, ServerSideParams } from "./dist/index.js";
+
+const columns = [
+  { title: "ID", field: "id", type: "number", sortable: true }, 
+  { title: "Product", field: "product_name", type: "string", searchable: true, filterType: "text" },
+  { title: "Category", field: "category", type: "string", filterType: "multi-select" }, // Example filterable
+  // ... other columns
+];
+
+const serverSideOptions = {
+  columns: columns,
+  processingMode: 'server', // <<< Enable server-side mode
+  pagination: { enabled: true, rowsPerPage: 25 },
+  sorting: { enabled: true },
+  searching: { enabled: true, debounceTime: 400 },
+  columnFiltering: { enabled: true },
+  // serverSideTotalRows: 0, // <<< Initial total (optional, will be updated by fetch)
+
+  serverSide: { // <<< Provide the fetch function
+    fetchData: async (params: ServerSideParams): Promise<{ data: any[][]; totalRecords: number }> => {
+      console.log("Fetching data with params:", params);
+      
+      // Construct your API endpoint URL with query parameters
+      const url = new URL('/api/data', window.location.origin);
+      url.searchParams.set('draw', String(params.draw)); // Echo back draw
+      url.searchParams.set('start', String(params.start)); // Start index (for OFFSET)
+      url.searchParams.set('length', String(params.length)); // Rows per page (for LIMIT)
+      
+      // Global search
+      if (params.search.value) {
+        url.searchParams.set('search[value]', params.search.value);
+      }
+      
+      // Sorting (handle single column sort for now)
+      if (params.order.length > 0) {
+        const sortColIndex = params.order[0].column;
+        const sortDir = params.order[0].dir;
+        const sortColField = columns[sortColIndex]?.field; // Get field name
+        if (sortColField) {
+           url.searchParams.set('order[0][column]', String(sortColIndex)); // Send index
+           url.searchParams.set('order[0][field]', sortColField);       // Send field name
+           url.searchParams.set('order[0][dir]', sortDir);
+        }
+      }
+      
+      // Column Filters
+      params.columns.forEach((col, index) => {
+        if (col.search.value) { // Check if filter value exists for this column
+          const colField = columns[index]?.field;
+          url.searchParams.set(`columns[${index}][search][value]`, col.search.value);
+          // You might need to send the operator as well if your backend supports it
+          // url.searchParams.set(`columns[${index}][search][operator]`, col.search.operator || 'contains'); 
+          if(colField) {
+            url.searchParams.set(`columns[${index}][data]`, colField); // Send field name
+          }
+        }
+      });
+
+      try {
+        const response = await fetch(url.toString());
+        if (!response.ok) {
+          throw new Error(`API Error: ${response.statusText}`);
+        }
+        const result = await response.json();
+        
+        // Ensure the response matches the expected structure
+        if (!result || typeof result.totalRecords !== 'number' || !Array.isArray(result.data)) {
+             throw new Error('Invalid API response structure');
+        }
+
+        // Return data and total records
+        return {
+          data: result.data,           // Array of arrays for rows
+          totalRecords: result.totalRecords // Total records matching filters (for pagination)
+        };
+      } catch (error) {
+        console.error("Error fetching server-side data:", error);
+        // Return empty data on error to prevent table crash
+        return { data: [], totalRecords: 0 }; 
+      }
+    }
+  }
+};
+
+const serverTable = new DataTable("serverTableElementId", serverSideOptions);
 ```
+
+**2. Backend API (`/api/data` - Conceptual Example):**
+
+Your backend needs to handle the query parameters sent by `fetchData`:
+
+*   **Pagination:** Use `start` (offset) and `length` (limit) in your database query (e.g., `LIMIT length OFFSET start`).
+*   **Sorting:** Use `order[0][field]` (or `order[0][column]` index) and `order[0][dir]` (`'asc'` or `'desc'`) to apply `ORDER BY` clauses.
+*   **Global Search:** Use `search[value]` to filter across multiple searchable columns (e.g., using `WHERE (col1 LIKE '%value%' OR col2 LIKE '%value%')`).
+*   **Column Filters:** Use `columns[index][search][value]` (and potentially `columns[index][data]` for field name) to apply specific `WHERE` conditions for individual columns. You might need to implement logic based on the filter operator if you send it.
+*   **Response:** The API **must** return a JSON object with:
+    *   `data`: An array of arrays, where each inner array represents a row matching the requested page, sort, and filters.
+    *   `totalRecords`: An integer representing the **total number of records** in the database that match the **current filters** (before pagination is applied). This is crucial for the DataTable to calculate the total number of pages correctly.
+    *   Optionally, you can echo back the `draw` parameter, though this specific implementation doesn't require it.
+
+**Example Backend Logic (Pseudo-code):**
+
+```javascript
+// Example using Express.js and a hypothetical DB query builder
+app.get('/api/data', async (req, res) => {
+  const params = req.query; // Access parameters like params.start, params.length, etc.
+  
+  let query = db.table('products');
+  
+  // Apply Filters (Global & Column)
+  // ... logic to add WHERE clauses based on params.search and params.columns ...
+  
+  // Get total count AFTER filtering
+  const totalRecords = await query.clone().count(); // Clone before applying pagination/sort
+
+  // Apply Sorting
+  // ... logic to add ORDER BY based on params.order ...
+
+  // Apply Pagination
+  query = query.limit(parseInt(params.length)).offset(parseInt(params.start));
+
+  // Fetch Data
+  const data = await query.select(); // Assuming this returns array of objects
+  
+  // Format data as array of arrays if needed
+  const formattedData = data.map(row => [row.id, row.product_name, row.category /*, ...*/]);
+
+  res.json({
+    draw: parseInt(params.draw), // Optional echo
+    totalRecords: totalRecords,
+    data: formattedData
+  });
+});
+```
+
+This setup allows the DataTable to efficiently handle massive amounts of data by delegating the heavy lifting to your server.
 
 ---
 
@@ -192,6 +339,7 @@ Every option available in **`DataTableOptions`** is described below. The default
 | Property | Type | Default | Description |
 | :-- | :-- | :-- | :-- |
 | `title` | `string` | — | **Required.** Header label. |
+| `field` | `string` | — | Unique key for the column, used for responsive config, ID column reference, **and server-side mapping**.
 | `type` | `'string' \|'number' \|'date' \|'mail' \|'tel' \|'money'` | `'string'` | Influences sorting, filter UI & formatting. |
 | `width` | `string` | "auto" | Initial CSS width (`px`, `%`, `rem`…). |
 | `sortable` | `boolean` | `true` | Disable per‑column to exclude from sorting even when global sorting is enabled. |
@@ -362,22 +510,22 @@ sequenceDiagram
 ## 🛣️ Roadmap & Changelog
 
 ### Implemented Features
-*   Foundations: Data display, sorting, global search, pagination (client-side).
+*   Foundations: Data display, **single-column sorting**, global search, pagination (client-side).
 *   Advanced Filtering: Per-column filters (text, number, date, multi-select) with popups & operators.
 *   Interactions: Row selection (single/multiple), row actions.
 *   Column Management: Resizing (manual/auto), Reordering.
 *   Export: CSV, Excel (.xlsx), PDF.
 *   State & UX: State persistence, Loading indicator, Persistent pagination bar.
-*   Optimization: Next page pre-loading (client-side).
+*   Optimization: Next page pre-loading (client-side), **Efficient rendering**.
 *   Icons: SVG sprite usage with inline fallback and configuration.
-*   **Responsive Column Visibility.**
-*   Examples: Multiple tables, custom rendering, direct CSV loading (`index.html`).
+*   Responsive Column Visibility.
+*   Examples: Multiple tables, custom rendering, direct CSV loading (`index.html`), Basic Server-Side mode.
 
 ### Upcoming 💡
 - Inline editing ✏️  
 - Grouping / aggregation 📊  
-- Multi‑column sort ⇅⇅  
-- Virtual scrolling for massive datasets 🚀  
+- **Multi‑column sort** ⇅⇅  
+- **Virtual scrolling** for massive datasets 🚀  
 - Theming API 🌈  
 - Improved server-side mode documentation/examples.
 - Unit/Integration tests.

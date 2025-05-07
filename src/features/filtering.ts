@@ -8,8 +8,8 @@ import { ColumnFilterState, TextFilterOperator, NumberFilterOperator, DateFilter
  * Creates and returns the search input field element.
  */
 export function renderSearchInput(instance: DataTable): HTMLInputElement {
-    const state = instance.stateManager;
-    const inputId = `${instance.element.id}-global-search`;
+    const state = instance.state;
+    const inputId = `${instance.el.id}-global-search`;
 
     const searchInput = document.createElement('input');
     searchInput.type = 'search';
@@ -18,26 +18,23 @@ export function renderSearchInput(instance: DataTable): HTMLInputElement {
     searchInput.value = state.getFilterTerm();
     searchInput.id = inputId;
     searchInput.setAttribute('role', 'searchbox');
-    searchInput.setAttribute('aria-controls', instance.element.id + '-tbody');
+    searchInput.setAttribute('aria-controls', instance.el.id + '-tbody');
+
+    let debounceTimeout: number | null = null;
 
     searchInput.addEventListener('input', (event) => {
         const target = event.target as HTMLInputElement;
         const searchTerm = target.value;
         const debounceTime = instance.options.searching?.debounceTime ?? 300;
 
-        if (instance.debounceTimer) {
-            clearTimeout(instance.debounceTimer);
+        if (debounceTimeout) {
+            clearTimeout(debounceTimeout);
         }
 
-        instance.debounceTimer = window.setTimeout(() => {
+        debounceTimeout = window.setTimeout(() => {
             state.setFilterTerm(searchTerm);
-            state.setCurrentPage(1);
+            instance.goToPage(1);
             dispatchSearchEvent(instance);
-            if (state.getIsServerSide() && instance.options.serverSide?.fetchData) {
-                 instance.fetchData();
-            } else if (!state.getIsServerSide()) {
-                 instance.render();
-            }
         }, debounceTime);
     });
     return searchInput;
@@ -58,7 +55,7 @@ function isValueEmpty(value: any): boolean {
  */
 export function applyFilters(instance: DataTable, data: any[][]): any[][] {
     let filteredData = data;
-    const state = instance.stateManager;
+    const state = instance.state;
 
     // 1. Apply Global Search Filter
     const globalFilterTerm = state.getFilterTerm();

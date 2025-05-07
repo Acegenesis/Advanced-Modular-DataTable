@@ -16,6 +16,10 @@
         body {
             padding: 2rem;
         }
+        /* *** SUPPRIMÉ: Hauteur fixe pour le conteneur *** */
+        /* #myTableContainer {
+            height: 500px; 
+        } */
     </style>
 </head>
 <body>
@@ -195,6 +199,7 @@
             columns: columns,
             data: data,
             uniqueRowIdColumn: 'id',
+            scrollWrapperMaxHeight: '500px',
             pagination: {
                 enabled: true,
                 rowsPerPage: 5,
@@ -218,7 +223,7 @@
                 { label: 'Modifier', actionId: 'edit', className: 'text-blue-500' },
                 { label: 'Supprimer', actionId: 'delete', className: 'text-red-500' }
             ],
-            stateManagement: { persist: true } 
+            stateManagement: { persist: true }
         };
 
         // Initialisation de la première table
@@ -241,36 +246,36 @@
         console.log("DataTable initialisé !");
 
         // Écouter les événements (exemples)
-        table1.element.addEventListener('dt:pageChange', (e) => {
-            console.log('Page changée:', e.detail);
+        table1.el.addEventListener('dt:pageChange', (e) => {
+            const detail = e.detail;
+            console.log('Page changée:', detail);
         });
 
-        table1.element.addEventListener('dt:sortChange', (e) => {
-            console.log('Tri changé:', e.detail);
+        table1.el.addEventListener('dt:sortChange', (e) => {
+            const detail = e.detail;
+            console.log('Tri changé:', detail);
         });
 
-        table1.element.addEventListener('dt:search', (e) => {
-            console.log('Recherche effectuée:', e.detail);
-            // Si en mode serveur, ici on ferait l'appel API pour récupérer les nouvelles données
-            // puis on appellerait table1.setData(nouvellesDonnees) et ajusterait options.serverSideTotalRows
+        table1.el.addEventListener('dt:search', (e) => {
+            const detail = e.detail;
+            console.log('Recherche effectuée:', detail);
         });
 
-        table1.element.addEventListener('dt:actionClick', (e) => {
-            console.log('Action cliquée (via délégation):', e.detail); 
-            // e.detail contient maintenant { actionId, rowData, rowId, rowIndex }
-            if (e.detail.actionId === 'delete') {
-                if (confirm(`Voulez-vous vraiment supprimer la ligne avec ID ${e.detail.rowId} ?`)) {
-                    table1.deleteRowById(e.detail.rowId);
-                    console.log(`Ligne ${e.detail.rowId} supprimée.`);
+        table1.el.addEventListener('dt:actionClick', (e) => {
+            const detail = e.detail;
+            console.log('Action cliquée:', detail); 
+            if (detail.actionId === 'delete') {
+                if (confirm(`Voulez-vous vraiment supprimer la ligne avec ID ${detail.rowId} ?`)) {
+                    table1.deleteRowById(detail.rowId);
+                    console.log(`Ligne ${detail.rowId} supprimée.`);
                 }
             }
         });
 
-        table1.element.addEventListener('dt:selectionChange', (e) => {
-            console.log('Sélection changée:', e.detail);
-            console.log('IDs sélectionnés:', e.detail.selectedIds);
-            console.log('Données sélectionnées:', e.detail.selectedData); // Attention: peut être limité à la page visible en mode serveur
-            // Mettre à jour d'autres parties de l'UI en fonction de la sélection
+        table1.el.addEventListener('dt:selectionChange', (e) => {
+            const detail = e.detail;
+            console.log('Sélection changée:', detail);
+            console.log('IDs sélectionnés:', detail.selectedIds);
         });
 
         // Exemple d'utilisation de l'API
@@ -313,7 +318,7 @@
         }
 
         // --- Configuration de la deuxième table ---
-
+        /*
         // Nouvel élément div pour la deuxième table
         const container2 = document.createElement('div');
         container2.id = 'datatable2';
@@ -468,6 +473,78 @@
 
         // Appeler l'initialisation de la table CSV
         initCsvTable();
+
+        */
+        // --- Début: Ajout du Deuxième Exemple (Virtual Scroll) ---
+
+        // Ajouter un titre pour la deuxième table
+        const headingVirtual = document.createElement('h2');
+        headingVirtual.textContent = 'Exemple 2: Virtual Scroll (1000 lignes)';
+        headingVirtual.className = 'text-xl font-semibold mt-8 mb-2';
+        const containerVirtual = document.getElementById('myTableContainer2');
+        if (containerVirtual && containerVirtual.parentNode) {
+            containerVirtual.parentNode.insertBefore(headingVirtual, containerVirtual);
+        }
+
+        // --- Styles CSS pour le conteneur du virtual scroll ---
+        // Vérifier si le style existe déjà pour éviter duplication
+        if (!document.getElementById('virtual-scroll-style')) {
+            const styleTagVirtual = document.createElement('style');
+            styleTagVirtual.id = 'virtual-scroll-style'; // ID pour éviter duplication
+            styleTagVirtual.textContent = `
+                #myTableContainer2 {
+                    height: 400px; /* Hauteur fixe pour le viewport du virtual scroll */
+                    border: 1px solid #ccc;
+                }
+            `;
+            document.head.appendChild(styleTagVirtual);
+        }
+
+        // --- Données et Configuration pour la Table Virtual Scroll ---
+        const dataVirtual = Array.from({ length: 1000 }, (_, i) => [
+            i + 1001, // Start IDs after first table potentially
+            `Catégorie ${String.fromCharCode(65 + (i % 5))}`, // A, B, C, D, E
+            Math.floor(Math.random() * 10000),
+            (i % 3 === 0) ? 'Validé' : 'En attente'
+        ]);
+
+        // Colonnes simples pour la table virtual scroll
+        const columnsVirtual = [
+            { title: 'ID', type: 'number', sortable: true, width: '100px' }, // Index 0
+            { title: 'Catégorie', type: 'string', sortable: true },       // Index 1
+            { title: 'Valeur', type: 'number', sortable: true },          // Index 2
+            { title: 'Statut', type: 'string', sortable: true }           // Index 3
+        ];
+
+        // Options pour la table virtual scroll
+        const optionsVirtual = {
+            columns: columnsVirtual,
+            data: dataVirtual,
+            uniqueRowIdColumnIndex: 0,
+            virtualScroll: {
+                enabled: true,
+                rowHeight: 35
+            },
+            pagination: { enabled: false },
+            sorting: { enabled: true },
+            searching: { enabled: false },
+            selection: { enabled: false },
+            columnFiltering: { enabled: false }
+        };
+
+        // --- Initialisation de la Table Virtual Scroll ---
+        try {
+            if (containerVirtual) {
+                const tableVirtual = new DataTable('myTableContainer2', optionsVirtual);
+                console.log("DataTable 2 (Virtual Scroll) initialisé !");
+            } else {
+                 console.error("Le conteneur #myTableContainer2 n'a pas été trouvé.");
+            }
+        } catch (error) {
+            console.error("Erreur lors de l'initialisation de DataTable 2:", error);
+        }
+
+        // --- Fin: Ajout du Deuxième Exemple ---
 
     </script>
 

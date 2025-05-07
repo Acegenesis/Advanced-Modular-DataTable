@@ -1,12 +1,8 @@
 import { DataTable } from "../core/DataTable";
-import { getCurrentPageData } from "../features/pagination";
 import { handleRowCheckboxClick, updateSelectAllCheckboxState } from "../features/selection";
-import { appendRenderedContent, renderCellByType } from "./cellRenderer";
 import { renderActionButtons } from './uiComponents';
 import { ColumnDefinition } from "../core/types";
-import { dispatchActionClickEvent, dispatchEvent, dispatchSelectionChangeEvent } from "../events/dispatcher";
-import { formatCellValue } from "../utils/formatting";
-import { getRowId } from "../utils/dom";
+import { dispatchActionClickEvent, dispatchSelectionChangeEvent } from "../events/dispatcher";
 
 // --- Body Rendering Logic ---
 
@@ -27,6 +23,21 @@ function getCachedDateTimeFormatter(locale: string, options: Intl.DateTimeFormat
         intlFormattersCache.set(cacheKey, new Intl.DateTimeFormat(locale, options));
     }
     return intlFormattersCache.get(cacheKey) as Intl.DateTimeFormat;
+}
+
+/**
+ * Gets the unique ID for a given row based on the configured unique ID column index.
+ * @param row The row data array.
+ * @param uniqueIdColumnIndex The index of the column containing the unique ID.
+ * @returns The row ID, or undefined if the index is out of bounds.
+ */
+function getRowId(row: any[], uniqueIdColumnIndex: number): any {
+    // Basic check to prevent errors if the index is invalid for the row
+    if (uniqueIdColumnIndex >= 0 && uniqueIdColumnIndex < row.length) {
+        return row[uniqueIdColumnIndex];
+    }
+    console.warn(`[getRowId] Invalid uniqueIdColumnIndex (${uniqueIdColumnIndex}) for row:`, row);
+    return undefined; // Return undefined if index is invalid
 }
 
 /**
@@ -90,9 +101,22 @@ function formatCellData(cellData: any, columnDef: Readonly<ColumnDefinition>): s
  * @param instance The DataTable instance.
  * @param table The TABLE element.
  * @param data The data to render in the body.
+ * @param columnOrderOverride Optional column order to use instead of state.
  */
-export function renderStandardBody(instance: DataTable, table: HTMLTableElement, data: any[][]): void {
-    const state = instance.stateManager;
+export function renderStandardBody(instance: DataTable, table: HTMLTableElement, data: any[][], columnOrderOverride?: number[]): void {
+    console.log(`[renderStandardBody START] Called. Order override: ${JSON.stringify(columnOrderOverride)}`);
+
+    // Log 1: Début de renderStandardBody
+    console.log(`[renderStandardBody START] Called for table ${instance.el.id}. Data length: ${data.length}`);
+
+    // Log 2: Vérifier existence instance.state
+    if (!instance.state) {
+        console.error("[renderStandardBody CRITICAL ERROR] instance.state is UNDEFINED or NULL!");
+        return; // Stop rendering if state is not available
+    }
+    console.log("[renderStandardBody] instance.state exists. Proceeding...");
+
+    const state = instance.state;
     let tbody = table.tBodies[0];
     if (!tbody) {
         tbody = table.createTBody();
@@ -102,22 +126,33 @@ export function renderStandardBody(instance: DataTable, table: HTMLTableElement,
         if (oldListener) {
             tbody.removeEventListener('click', oldListener);
         }
-        tbody.innerHTML = ''; 
+        tbody.innerHTML = '';
     }
 
-    const columnOrder = state.getColumnOrder(); 
+    // Log 3: Vérifier si state.getColumnOrder est une fonction AVANT l'appel
+    if (typeof state.getColumnOrder !== 'function') {
+        console.error("[renderStandardBody CRITICAL ERROR] state.getColumnOrder is NOT a function! State object:", state);
+        return;
+    }
+    console.log("[renderStandardBody] state.getColumnOrder is a function. About to call it...");
+
+    // Utiliser l'override s'il est fourni, sinon prendre celui de l'état
+    const columnOrder = columnOrderOverride ?? state.getColumnOrder();
+    console.log(`[renderStandardBody] Using column order: ${JSON.stringify(columnOrder)}`);
+
     const selectedRowIds = state.getSelectedRowIds();
     const selectionEnabled = state.getSelectionEnabled();
-    const uniqueRowIdColumn = instance.options.uniqueRowIdColumn || 0;
+    const uniqueRowIdColumn = instance.idColumn;
     const rowActions = instance.options.rowActions;
     const visibleColumns = state.getVisibleColumns();
 
     // Stocker les données de la page actuelle pour les retrouver lors du clic
     const currentPagedDataMap = new Map<string, any[]>();
     const currentPagedRowIndexMap = new Map<string, number>();
+
     if (rowActions && rowActions.length > 0) {
         data.forEach((row, index) => {
-            const rowId = row[uniqueRowIdColumn as number];
+            const rowId = getRowId(row, uniqueRowIdColumn);
             if (rowId !== undefined && rowId !== null) {
                 const rowIdStr = String(rowId);
                 currentPagedDataMap.set(rowIdStr, row);
@@ -128,6 +163,7 @@ export function renderStandardBody(instance: DataTable, table: HTMLTableElement,
 
     if (data.length === 0) {
         renderEmptyState(instance, tbody);
+        updateSelectAllCheckboxState(instance);
         return;
     }
 
@@ -138,7 +174,7 @@ export function renderStandardBody(instance: DataTable, table: HTMLTableElement,
         tr.setAttribute('role', 'row');
         tr.className = 'transition-colors duration-150 ease-in-out hover:bg-gray-50';
         
-        const rowId = row[uniqueRowIdColumn as number];
+        const rowId = getRowId(row, uniqueRowIdColumn);
         if (selectionEnabled && selectedRowIds.has(rowId)) {
             tr.classList.remove('hover:bg-gray-50');
             tr.classList.add('bg-blue-100'); 
@@ -161,21 +197,18 @@ export function renderStandardBody(instance: DataTable, table: HTMLTableElement,
             const checkbox = document.createElement('input');
             checkbox.type = state.getSelectionMode() === 'single' ? 'radio' : 'checkbox';
             checkbox.className = 'form-checkbox h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500';
-            checkbox.name = state.getSelectionMode() === 'single' ? `dt-select-${instance.element.id}` : ''; 
+            checkbox.name = state.getSelectionMode() === 'single' ? `dt-select-${instance.el.id}` : '';
             checkbox.checked = selectedRowIds.has(rowId);
             checkbox.setAttribute('aria-label', `Select row ${rowIndex + 1}`);
-            checkbox.addEventListener('change', () => {
-                state.toggleRowSelection(rowId);
-                instance.render(); 
-                instance.element.dispatchEvent(new CustomEvent('dt:selectionChange', { 
-                    detail: { selectedIds: Array.from(state.getSelectedRowIds()) }
-                }));
+            checkbox.addEventListener('change', (event) => {
+                 const target = event.target as HTMLInputElement;
+                 handleRowCheckboxClick(instance, rowId, target.checked);
             });
             tdCheckbox.appendChild(checkbox);
             tr.appendChild(tdCheckbox);
         }
 
-        columnOrder.forEach(originalIndex => {
+        columnOrder.forEach((originalIndex: number) => {
             if (!visibleColumns.has(originalIndex)) {
                 return;
             }
@@ -184,6 +217,12 @@ export function renderStandardBody(instance: DataTable, table: HTMLTableElement,
             const td = document.createElement('td'); 
             td.setAttribute('role', 'cell');
             td.className = 'dt-td px-4 py-2 text-sm text-gray-700 border-b border-gray-200 whitespace-nowrap overflow-hidden text-ellipsis';
+            
+            // *** AJOUT: Appliquer la largeur de la colonne si définie ***
+            if (columnDef.width) {
+                td.style.width = columnDef.width;
+            }
+
             if (columnDef?.render) {
                 try {
                     const renderResult = columnDef.render(cellData, row, columnDef, td);
@@ -286,6 +325,7 @@ export function renderStandardBody(instance: DataTable, table: HTMLTableElement,
         // Stocker la référence au listener pour pouvoir le retirer plus tard
         (tbody as any)._dtActionClickListener = actionClickListener;
     }
+    console.log(`[renderStandardBody END] Body rendered for table ${instance.el.id}`); // Log 5
 }
 
 /**
@@ -294,7 +334,7 @@ export function renderStandardBody(instance: DataTable, table: HTMLTableElement,
  * @param tbody The TBODY element.
  */
 function renderEmptyState(instance: DataTable, tbody: HTMLTableSectionElement): void {
-    const state = instance.stateManager; 
+    const state = instance.state; 
     const row = tbody.insertRow();
     const cell = row.insertCell();
     const totalColumnCount =
@@ -317,24 +357,177 @@ function handleRowClick(event: MouseEvent | KeyboardEvent, instance: DataTable, 
         return;
     }
 
-    if (!instance.stateManager.getSelectionEnabled()) return;
+    if (!instance.state.getSelectionEnabled()) return;
 
     // Gérer la sélection
-    instance.stateManager.toggleRowSelection(rowId);
-    updateSelectAllCheckboxState(instance);
+    instance.state.toggleRowSelection(rowId);
     dispatchSelectionChangeEvent(instance);
     instance.render(); // Re-render pour mettre à jour le style de la ligne
 }
 
-function updateSelectAllCheckboxState(instance: DataTable) {
-    const state = instance.stateManager;
-    const selectedRowIds = state.getSelectedRowIds();
-    const selectionEnabled = state.getSelectionEnabled();
-    const selectAllCheckbox = document.querySelector(`#${instance.element.id}-select-all`) as HTMLInputElement;
+// --- Body Rendering --- 
 
-    if (selectionEnabled) {
-        selectAllCheckbox.checked = selectedRowIds.size === state.getTotalRowCount();
+/**
+ * Renders the rows for virtual scrolling.
+ * Calculates visible rows based on scroll position and renders only those.
+ * @param instance The DataTable instance.
+ * @param contentElement The DIV element where rows will be absolutely positioned.
+ * @param viewportElement The scrolling DIV element (viewport).
+ * @param allData The complete, filtered, and sorted data array.
+ * @param columnOrderOverride Optional column order to use instead of state.
+ */
+export function renderVirtualBody(
+    instance: DataTable, 
+    contentElement: HTMLElement, 
+    viewportElement: HTMLElement, 
+    allData: any[][],
+    columnOrderOverride?: number[]
+): void {
+    console.log(`[renderVirtualBody] Called. Order override: ${JSON.stringify(columnOrderOverride)}`);
+    const options = instance.options.virtualScroll;
+    if (!options?.enabled) return;
+
+    const { rowHeight, bufferRows = 10 } = options;
+    const state = instance.state;
+    const columnOrder = columnOrderOverride ?? state.getColumnOrder();
+    console.log(`[renderVirtualBody] Using column order: ${JSON.stringify(columnOrder)}`);
+    const visibleColumns = state.getVisibleColumns();
+    const columns = instance.options.columns;
+    const uniqueIdColumnIndex = instance.idColumn;
+    const hasRowActions = instance.options.rowActions && instance.options.rowActions.length > 0;
+    const selectionEnabled = state.getSelectionEnabled();
+    const selectedRowIds = state.getSelectedRowIds();
+
+    const totalRows = allData.length;
+    const scrollTop = viewportElement.scrollTop;
+    const viewportHeight = viewportElement.clientHeight;
+
+    // Calculer les index des lignes à rendre
+    const startIndex = Math.max(0, Math.floor(scrollTop / rowHeight) - bufferRows);
+    const endIndex = Math.min(totalRows, Math.ceil((scrollTop + viewportHeight) / rowHeight) + bufferRows);
+
+    console.log(`[RenderVirtualBody] ScrollTop: ${scrollTop.toFixed(0)}, ViewportH: ${viewportHeight}, TotalRows: ${totalRows}, StartIdx: ${startIndex}, EndIdx: ${endIndex}`);
+
+    // Obtenir la tranche de données à afficher
+    const dataToRender = allData.slice(startIndex, endIndex);
+    
+    console.log(`[RenderVirtualBody] Rendering ${dataToRender.length} rows (indices ${startIndex} to ${endIndex - 1}) out of ${totalRows} total rows.`);
+    
+    // Vider le conteneur
+    contentElement.innerHTML = '';
+    const fragment = document.createDocumentFragment();
+
+    if (totalRows === 0) {
+        renderEmptyState(instance, contentElement as unknown as HTMLTableSectionElement);
+        return;
     } else {
-        selectAllCheckbox.checked = false;
+         contentElement.style.textAlign = '';
+         contentElement.style.padding = '';
     }
+
+    // Rendre uniquement les lignes visibles
+    dataToRender.forEach((row, indexInSlice) => {
+        const absoluteRowIndex = startIndex + indexInSlice;
+        const rowId = getRowId(row, uniqueIdColumnIndex);
+        
+        const tr = document.createElement('tr');
+        tr.dataset.rowId = String(rowId);
+        tr.setAttribute('role', 'row');
+        tr.style.position = 'absolute';
+        tr.style.top = `${absoluteRowIndex * rowHeight}px`;
+        tr.style.height = `${rowHeight}px`;
+        tr.style.width = '100%'; // Important pour la largeur
+        tr.style.display = 'flex'; // Utiliser flex pour aligner les cellules
+        tr.style.alignItems = 'center'; // Centrer verticalement par défaut
+
+        const isSelected = selectedRowIds.has(rowId);
+        tr.className = `dt-row ${isSelected ? 'bg-indigo-50 dt-row-selected' : (absoluteRowIndex % 2 === 0 ? 'bg-white' : 'bg-gray-50')}`;
+        if (selectionEnabled) {
+            tr.classList.add('cursor-pointer');
+            tr.tabIndex = -1;
+            tr.addEventListener('click', (e) => handleRowClick(e, instance, rowId));
+             tr.addEventListener('keydown', (e) => {
+                 if (e.key === 'Enter' || e.key === ' ') {
+                     e.preventDefault();
+                     handleRowClick(e, instance, rowId);
+                 }
+             });
+        }
+
+        // Colonne de sélection
+        if (selectionEnabled) {
+            const tdSelect = document.createElement('td');
+            tdSelect.className = 'dt-td px-6 py-2 whitespace-nowrap text-sm text-gray-500 flex-shrink-0';
+            tdSelect.style.width = '50px';
+            tdSelect.style.display = 'flex';
+            tdSelect.style.alignItems = 'center';
+            const checkbox = document.createElement('input');
+            checkbox.type = state.getSelectionMode() === 'single' ? 'radio' : 'checkbox';
+            checkbox.className = 'dt-checkbox h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500';
+            checkbox.checked = isSelected;
+            checkbox.dataset.rowId = String(rowId);
+            checkbox.setAttribute('aria-label', `Sélectionner la ligne ${absoluteRowIndex + 1}`);
+            checkbox.addEventListener('change', (e) => {
+                const target = e.target as HTMLInputElement;
+                handleRowCheckboxClick(instance, rowId, target.checked);
+            });
+            tdSelect.appendChild(checkbox);
+            tr.appendChild(tdSelect);
+        }
+
+        // Cellules de données (rendues comme des TD)
+        columnOrder.forEach((originalIndex: number) => {
+            if (!visibleColumns.has(originalIndex)) {
+                return;
+            }
+            
+            const col = columns[originalIndex];
+            const cellData = row[originalIndex];
+            const td = document.createElement('td');
+            td.className = 'dt-td px-6 py-2 whitespace-nowrap text-sm text-gray-500 overflow-hidden text-ellipsis flex-shrink-0';
+            td.setAttribute('role', 'cell');
+            td.style.boxSizing = 'border-box';
+            
+            // Appliquer la largeur de la colonne (si définie)
+            const colWidth = state.getColumnWidths().get(originalIndex) || parseInt(col.width || '0', 10);
+            if (colWidth > 0) {
+                 td.style.width = `${colWidth}px`;
+                 td.style.flexBasis = `${colWidth}px`;
+            } else {
+                 td.style.flexGrow = '1';
+            }
+            
+            if (col.render) {
+                const renderResult = col.render(cellData, row, col, td);
+                if (renderResult !== undefined && renderResult !== null) {
+                    if (typeof renderResult === 'string') {
+                        td.innerHTML = renderResult;
+                    } else if (renderResult instanceof Node) {
+                        td.appendChild(renderResult);
+                    }
+                }
+            } else {
+                td.textContent = formatCellData(cellData, col);
+            }
+            tr.appendChild(td);
+        });
+
+        // Colonne d'actions (rendue comme un TD final)
+        if (hasRowActions) {
+             const tdActions = renderActionButtons(instance, tr, row);
+             if (tdActions) {
+                tdActions.style.flexShrink = '0';
+                const actionsColWidth = instance.options.actionsColumn?.width;
+                 if (actionsColWidth) {
+                     tdActions.style.width = actionsColWidth;
+                     tdActions.style.flexBasis = actionsColWidth;
+                 }
+                 tr.appendChild(tdActions);
+             }
+        }
+        
+        fragment.appendChild(tr);
+    });
+
+    contentElement.appendChild(fragment);
 } 

@@ -1,6 +1,5 @@
 // Point d'entrée principal du package
 import { DataTable } from './core/DataTable';
-import { DataTableOptions, ColumnDefinition, RowAction, SortDirection } from './core/types';
 import { ColumnVisibilityController } from './controllers/ColumnVisibilityController';
 
 // Exporter la classe principale

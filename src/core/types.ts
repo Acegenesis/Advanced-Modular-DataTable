@@ -83,6 +83,12 @@ export interface IconOptions {
     pageNext?: string;  // ID du symbole pour la flèche page suivante
 }
 
+export interface VirtualScrollOptions {
+    enabled: boolean;
+    rowHeight: number; // Hauteur fixe en pixels OBLIGATOIRE
+    bufferRows?: number; // Nombre de lignes en tampon (ex: 10)
+}
+
 // Options principales
 export interface DataTableOptions {
     columns: ColumnDefinition[];
@@ -106,10 +112,15 @@ export interface DataTableOptions {
     columnFiltering?: { enabled: boolean; showClearButton?: boolean; };
     stateManagement?: { persist?: boolean; prefix?: string; };
     resizableColumns?: boolean;
+    reorderableColumns?: boolean;
     createdRowCallback?: (rowElement: HTMLTableRowElement, rowData: any[]) => void;
     
     /** Options pour personnaliser les icônes SVG utilisées (IDs des symboles du sprite) */
     icons?: IconOptions;
+    virtualScroll?: VirtualScrollOptions;
+    
+    /** Hauteur maximale pour la zone scrollable de la table (incluant l'en-tête). Ex: '400px', '60vh'. Active le défilement si le contenu dépasse. */
+    scrollWrapperMaxHeight?: string;
 }
 
 // Opérateurs pour les filtres texte

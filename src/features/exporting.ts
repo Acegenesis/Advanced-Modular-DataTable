@@ -6,103 +6,118 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
 /**
- * Converts an array of arrays into a CSV string with a specific delimiter.
+ * Échappe une valeur pour une utilisation dans un CSV (guillemets si nécessaire).
  */
-function convertToCSV(data: any[][], headers: string[], delimiter: string): string {
-    const escapeCell = (cellData: any): string => {
-        if (cellData === null || cellData === undefined) {
-            return '';
-        }
-        const stringData = String(cellData);
-        // Si la donnée contient le délimiteur, des guillemets ou un retour à la ligne, l'entourer de guillemets
-        if (stringData.includes(delimiter) || stringData.includes('"') || stringData.includes('\n')) {
-            const escapedData = stringData.replace(/"/g, '""');
-            return `"${escapedData}"`;
-        }
-        return stringData;
-    };
-
-    const headerRow = headers.map(escapeCell).join(delimiter);
-    const dataRows = data.map(row =>
-        row.map(escapeCell).join(delimiter)
-    );
-
-    return [headerRow, ...dataRows].join('\n');
+function escapeCsvValue(value: any): string {
+    const stringValue = (value === null || value === undefined) ? '' : String(value);
+    if (stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n')) {
+        // Doubler les guillemets existants et entourer de guillemets
+        return `"${stringValue.replace(/"/g, '""')}"`;
+    }
+    return stringValue;
 }
 
 /**
- * Triggers the download of a CSV file with specified filename, encoding, and optional BOM.
+ * Génère une chaîne CSV à partir des données et des en-têtes.
+ * @param instance DataTable instance.
+ * @param data Les données à exporter (généralement filtrées/triées).
+ * @returns La chaîne CSV complète.
  */
-function downloadCSV(csvContent: string, filename: string, encoding: string, addBom: boolean): void {
-    const mimeType = `text/csv;charset=${encoding.toLowerCase()}`;
-    let contentToDownload = csvContent;
+function generateCsvString(instance: DataTable, data: any[][]): string {
+    const state = instance.state;
+    const columns = instance.options.columns;
+    const columnOrder = state.getColumnOrder();
+    const visibleColumns = state.getVisibleColumns();
 
-    // Préfixer avec BOM si UTF-8 et demandé
-    if (addBom && encoding.toLowerCase() === 'utf-8') {
-        contentToDownload = "\uFEFF" + csvContent; // BOM pour UTF-8
-    }
+    // Créer les en-têtes basés sur l'ordre et la visibilité actuels
+    const headers = columnOrder
+        .filter(index => visibleColumns.has(index))
+        .map(index => escapeCsvValue(columns[index]?.title || `Colonne ${index}`));
+    
+    let csvContent = headers.join(',') + '\r\n'; // En-têtes CSV
 
-    const blob = new Blob([contentToDownload], { type: mimeType });
-    const link = document.createElement("a");
+    // Ajouter les lignes de données
+    data.forEach(row => {
+        const rowValues = columnOrder
+            .filter(index => visibleColumns.has(index))
+            .map(index => escapeCsvValue(row[index]));
+        csvContent += rowValues.join(',') + '\r\n';
+    });
 
-    if (link.download !== undefined) {
-        const url = URL.createObjectURL(blob);
-        link.setAttribute("href", url);
-        link.setAttribute("download", filename);
-        link.style.visibility = 'hidden';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-    } else {
-        alert("La fonctionnalité de téléchargement n'est pas prise en charge par votre navigateur.");
-    }
+    return csvContent;
 }
 
 /**
- * Exports the current data using the specified CSV options.
+ * Déclenche le téléchargement d'un fichier texte (utilisé pour CSV/Excel simplifié).
+ */
+function triggerDownload(content: string, filename: string, mimeType: string) {
+    const blob = new Blob([content], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
+/**
+ * Exporte les données actuellement visibles (filtrées/triées) au format CSV.
  */
 export function exportToCSV(instance: DataTable): void {
-    const state = instance.stateManager;
-    // 1. Récupérer les données à exporter (filtrées/triées, dans l'ordre actuel)
-    const dataToExport = state.getDisplayedData(); // Utiliser les données déjà traitées (ou recalculer si nécessaire)
-    const columnOrder = state.getColumnOrder();
-    const headers = columnOrder.map(index => instance.options.columns[index]?.title || `Colonne ${index}`);
-
-    if (dataToExport.length === 0) {
-        alert("Aucune donnée à exporter.");
-        return;
+    console.log("[Export] Exporting to CSV...");
+    try {
+        const dataToExport = getCurrentFilteredSortedData(instance);
+        if (dataToExport.length === 0) {
+            console.warn("[Export CSV] Aucune donnée à exporter.");
+            alert("Aucune donnée à exporter."); // Informer l'utilisateur
+            return;
+        }
+        const csvString = generateCsvString(instance, dataToExport);
+        triggerDownload(csvString, 'export.csv', 'text/csv;charset=utf-8;');
+        console.log("[Export CSV] Exportation réussie.");
+    } catch (error) {
+        console.error("[Export CSV] Erreur lors de l'exportation:", error);
+        alert("Une erreur est survenue lors de l'exportation CSV.");
     }
+}
 
-    // 2. Préparer les données pour CSV
-    // Mapping des données selon l'ordre des colonnes
-    const csvData = dataToExport.map(row => 
-        columnOrder.map(index => `"${String(row[index] ?? '').replace(/"/g, '""')}"`) // Échapper les guillemets
-        .join(',')
-    );
+/**
+ * Exporte les données actuellement visibles (filtrées/triées) dans un fichier .xlsx
+ * (en utilisant le format CSV encapsulé, lisible par Excel).
+ */
+export function exportToExcel(instance: DataTable): void {
+     console.log("[Export] Exporting to Excel (CSV format)...");
+     try {
+         const dataToExport = getCurrentFilteredSortedData(instance);
+          if (dataToExport.length === 0) {
+             console.warn("[Export Excel] Aucune donnée à exporter.");
+             alert("Aucune donnée à exporter.");
+             return;
+         }
+         // Ajouter un BOM UTF-8 pour une meilleure compatibilité Excel avec les caractères spéciaux
+         const BOM = '\uFEFF'; 
+         const csvString = generateCsvString(instance, dataToExport);
+         triggerDownload(BOM + csvString, 'export.xlsx', 'text/csv;charset=utf-8;'); // Utiliser .xlsx mais MIME CSV
+         console.log("[Export Excel] Exportation réussie.");
+    } catch (error) {
+        console.error("[Export Excel] Erreur lors de l'exportation:", error);
+        alert("Une erreur est survenue lors de l'exportation Excel.");
+    }
+}
 
-    // 3. Créer le contenu CSV
-    const csvContent = [
-        headers.map(header => `"${header.replace(/"/g, '""')}"`).join(','), // Headers échappés
-        ...csvData
-    ].join('\r\n'); // Séparateur de ligne Windows/standard
-
-    // 4. Créer et télécharger le fichier
-    const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' }); // BOM pour Excel
-    const link = document.createElement('a');
-    const url = URL.createObjectURL(blob);
-    link.setAttribute('href', url);
-    link.setAttribute('download', 'datatable_export.csv');
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+// Fonction pour PDF (non implémentée par défaut)
+export function exportToPDF(instance: DataTable): void {
+    console.warn("[Export PDF] La fonction d'exportation PDF n'est pas implémentée par défaut.");
+    alert("L'exportation PDF n'est pas disponible pour le moment.");
+    // Logique nécessitant jspdf / jspdf-autotable...
 }
 
 // --- Excel Export (Utilisant ExcelJS) ---
-export async function exportToExcel(instance: DataTable): Promise<void> {
+export async function exportToExcelJS(instance: DataTable): Promise<void> {
     console.log("[exportToExcel - ExcelJS] Starting Excel export...");
-    const state = instance.stateManager;
+    const state = instance.state;
 
     // 1. Récupérer données et en-têtes
     const dataToExport = state.getDisplayedData(); 
@@ -178,9 +193,9 @@ export async function exportToExcel(instance: DataTable): Promise<void> {
 }
 
 // --- PDF Export (NOUVEAU) ---
-export function exportToPDF(instance: DataTable): void {
+export function exportToPDFJS(instance: DataTable): void {
     console.log("[exportToPDF] Starting PDF export...");
-    const state = instance.stateManager;
+    const state = instance.state;
 
     // 1. Récupérer données et en-têtes
     const dataToExport = state.getDisplayedData();

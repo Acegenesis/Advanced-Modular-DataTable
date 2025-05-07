@@ -72,6 +72,14 @@ function createAdvancedTextFilterPopup(instance: DataTable, columnIndex: number,
     valueInput.setAttribute('aria-label', 'Valeur du filtre');
     popup.appendChild(valueInput);
 
+    // ** Ajouter listener Keydown pour Entrée **
+    valueInput.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' && !valueInput.disabled) {
+            event.preventDefault();
+            applyButton.click(); // Simuler le clic sur Appliquer
+        }
+    });
+
     const updateValueInputState = (operator: TextFilterOperator) => {
         const requiresValue = operator !== 'isEmpty' && operator !== 'isNotEmpty';
         valueInput.disabled = !requiresValue;
@@ -94,8 +102,9 @@ function createAdvancedTextFilterPopup(instance: DataTable, columnIndex: number,
     clearButton.textContent = 'Effacer';
     clearButton.className = 'px-3 py-1 border border-gray-300 rounded-md text-sm text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-1 focus:ring-indigo-500';
     clearButton.addEventListener('click', () => {
-        instance.setColumnFilter(columnIndex, null);
+        instance.state.setColumnFilter(columnIndex, null);
         closeActivePopup();
+        instance.goToPage(1);
     });
     const applyButton = document.createElement('button');
     applyButton.type = 'button';
@@ -104,8 +113,9 @@ function createAdvancedTextFilterPopup(instance: DataTable, columnIndex: number,
     applyButton.addEventListener('click', () => {
         const selectedOperator = operatorSelect.value as TextFilterOperator;
         const enteredValue = (selectedOperator !== 'isEmpty' && selectedOperator !== 'isNotEmpty') ? valueInput.value : '';
-        instance.setColumnFilter(columnIndex, { value: enteredValue, operator: selectedOperator });
+        instance.state.setColumnFilter(columnIndex, { value: enteredValue, operator: selectedOperator });
         closeActivePopup();
+        instance.goToPage(1);
     });
     buttonContainer.appendChild(clearButton);
     buttonContainer.appendChild(applyButton);
@@ -190,6 +200,19 @@ function createAdvancedNumberFilterPopup(instance: DataTable, columnIndex: numbe
     inputContainer.appendChild(valueInputTo);
     popup.appendChild(inputContainer);
 
+    // ** Ajouter listener Keydown pour Entrée **
+    const handleKeyDown = (event: KeyboardEvent) => {
+        if (event.key === 'Enter') {
+            const activeElement = document.activeElement as HTMLInputElement;
+             if (activeElement && !activeElement.disabled) {
+                 event.preventDefault();
+                 applyButton.click();
+            }
+        }
+    };
+    valueInput.addEventListener('keydown', handleKeyDown);
+    valueInputTo.addEventListener('keydown', handleKeyDown);
+
     const updateValueInputState = (operator: NumberFilterOperator) => {
         const requiresValue = operator !== 'isEmpty' && operator !== 'isNotEmpty';
         const requiresRange = operator === 'between';
@@ -213,8 +236,9 @@ function createAdvancedNumberFilterPopup(instance: DataTable, columnIndex: numbe
     clearButton.textContent = 'Effacer';
     clearButton.className = 'px-3 py-1 border border-gray-300 rounded-md text-sm text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-1 focus:ring-indigo-500';
     clearButton.addEventListener('click', () => {
-        instance.setColumnFilter(columnIndex, null);
+        instance.state.setColumnFilter(columnIndex, null);
         closeActivePopup();
+        instance.goToPage(1);
     });
     const applyButton = document.createElement('button');
     applyButton.type = 'button';
@@ -245,8 +269,9 @@ function createAdvancedNumberFilterPopup(instance: DataTable, columnIndex: numbe
             }
         }
 
-        instance.setColumnFilter(columnIndex, { value: filterValue, operator: selectedOperator });
+        instance.state.setColumnFilter(columnIndex, { value: filterValue, operator: selectedOperator });
         closeActivePopup();
+        instance.goToPage(1);
     });
     buttonContainer.appendChild(clearButton);
     buttonContainer.appendChild(applyButton);
@@ -327,6 +352,19 @@ function createAdvancedDateFilterPopup(instance: DataTable, columnIndex: number,
     inputContainer.appendChild(valueInputTo);
     popup.appendChild(inputContainer);
 
+    // ** Ajouter listener Keydown pour Entrée **
+    const handleDateKeyDown = (event: KeyboardEvent) => {
+        if (event.key === 'Enter') {
+            const activeElement = document.activeElement as HTMLInputElement;
+             if (activeElement && !activeElement.disabled) {
+                 event.preventDefault();
+                 applyButton.click();
+            }
+        }
+    };
+    valueInput.addEventListener('keydown', handleDateKeyDown);
+    valueInputTo.addEventListener('keydown', handleDateKeyDown);
+
     const updateValueInputState = (operator: DateFilterOperator) => {
         const requiresValue = operator !== 'isEmpty' && operator !== 'isNotEmpty';
         const requiresRange = operator === 'between';
@@ -350,8 +388,9 @@ function createAdvancedDateFilterPopup(instance: DataTable, columnIndex: number,
     clearButton.textContent = 'Effacer';
     clearButton.className = 'px-3 py-1 border border-gray-300 rounded-md text-sm text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-1 focus:ring-indigo-500';
     clearButton.addEventListener('click', () => {
-        instance.setColumnFilter(columnIndex, null);
+        instance.state.setColumnFilter(columnIndex, null);
         closeActivePopup();
+        instance.goToPage(1);
     });
     const applyButton = document.createElement('button');
     applyButton.type = 'button';
@@ -382,8 +421,9 @@ function createAdvancedDateFilterPopup(instance: DataTable, columnIndex: number,
             }
         }
 
-        instance.setColumnFilter(columnIndex, { value: filterValue, operator: selectedOperator });
+        instance.state.setColumnFilter(columnIndex, { value: filterValue, operator: selectedOperator });
         closeActivePopup();
+        instance.goToPage(1);
     });
     buttonContainer.appendChild(clearButton);
     buttonContainer.appendChild(applyButton);
@@ -411,7 +451,7 @@ function createMultiSelectFilterPopup(instance: DataTable, columnIndex: number, 
 
     // --- Options (fournies ou auto-générées) ---
     let options: { value: string; label: string }[] = [];
-    const state = instance.stateManager;
+    const state = instance.state;
     if (columnDef.filterOptions) {
         options = columnDef.filterOptions.map(opt => typeof opt === 'string' ? { value: opt, label: opt } : { value: String(opt.value), label: opt.label });
     } else {
@@ -492,8 +532,9 @@ function createMultiSelectFilterPopup(instance: DataTable, columnIndex: number, 
     clearButton.textContent = 'Effacer';
     clearButton.className = 'px-3 py-1 border border-gray-300 rounded-md text-sm text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-1 focus:ring-indigo-500';
     clearButton.addEventListener('click', () => {
-        instance.setColumnFilter(columnIndex, null);
+        instance.state.setColumnFilter(columnIndex, null);
         closeActivePopup();
+        instance.goToPage(1);
     });
 
     const applyButton = document.createElement('button');
@@ -507,12 +548,13 @@ function createMultiSelectFilterPopup(instance: DataTable, columnIndex: number, 
         });
 
         if (selectedValues.length > 0) {
-            instance.setColumnFilter(columnIndex, { value: selectedValues, operator: 'in' });
+            instance.state.setColumnFilter(columnIndex, { value: selectedValues, operator: 'in' });
         } else {
             // Si rien n'est coché, effacer le filtre
-            instance.setColumnFilter(columnIndex, null);
+            instance.state.setColumnFilter(columnIndex, null);
         }
         closeActivePopup();
+        instance.goToPage(1);
     });
 
     buttonContainer.appendChild(clearButton);
@@ -568,6 +610,10 @@ function handleMouseDown(event: MouseEvent, instance: DataTable, columnIndex: nu
 }
 
 function handleMouseMove(event: MouseEvent) {
+    // *** LOG AJOUTÉ ***
+    if (!isResizing) return; // Log seulement si on est en train de redimensionner
+    console.log(`[Resize Mousemove] ClientX: ${event.clientX}`);
+    
     if (!isResizing || !currentTh) {
         return;
     }
@@ -586,7 +632,7 @@ function handleMouseMove(event: MouseEvent) {
 
 function handleMouseUp(event: MouseEvent) {
     // *** LOG AJOUTÉ ***
-    console.log('[Resize Mouseup START] Event:', event);
+    console.log(`[Resize Mouseup START] IsResizing: ${isResizing}, Target:`, event.target);
     
     if (!isResizing || !currentTh || !instanceRef) {
         console.warn('[Resize Mouseup] ABORT: Inconsistent state on mouse up.');
@@ -600,12 +646,12 @@ function handleMouseUp(event: MouseEvent) {
     }
     
     const thElement = currentTh;
-    const savedInstance = instanceRef;
-    const savedIndex = resizingColumnIndex; 
+    const savedInstance = instanceRef as DataTable;
+    const savedIndex = resizingColumnIndex as number; 
     console.log(`[Resize Mouseup] Processing for colIndex: ${savedIndex}`);
 
     const finalWidth = thElement.offsetWidth;
-    savedInstance.stateManager.setColumnWidth(savedIndex as number, finalWidth);
+    savedInstance.state.setColumnWidth(savedIndex, finalWidth);
     console.log(`[Resize Mouseup] Saved finalWidth=${finalWidth} for colIndex ${savedIndex}`);
 
     // Émettre l'événement de redimensionnement de colonne
@@ -646,8 +692,8 @@ function handleDoubleClickResize(event: MouseEvent, instance: DataTable, columnI
     event.stopPropagation();
     console.log(`[DblClickResize v6 START] Triggered for originalIndex: ${columnIndex}`);
 
-    const state = instance.stateManager;
-    const table = instance.element.querySelector('table');
+    const state = instance.state;
+    const table = instance.el.querySelector('table');
     const thead = table?.tHead;
     const tbody = table?.tBodies[0];
     const headerRow = thead?.rows[0];
@@ -764,7 +810,7 @@ function handleDoubleClickResize(event: MouseEvent, instance: DataTable, columnI
         th.style.maxWidth = `${finalWidth}px`;
         th.style.flexGrow = '0';
         th.style.flexShrink = '0';
-        instance.stateManager.setColumnWidth(columnIndex, finalWidth);
+        instance.state.setColumnWidth(columnIndex, finalWidth);
     } else {
         console.log(`[DblClickResize v6] NO ACTION: Column ${columnIndex} is already at or below required width.`);
     }
@@ -833,7 +879,7 @@ function handleDrop(event: DragEvent, instance: DataTable, targetOriginalIndex: 
         return; 
     }
 
-    const currentOrder = instance.stateManager.getColumnOrder();
+    const currentOrder = instance.state.getColumnOrder();
     // Index dans le tableau `currentOrder`
     const fromIndex = currentOrder.indexOf(draggedColumnIndex);
     const toIndex = currentOrder.indexOf(targetOriginalIndex);
@@ -855,7 +901,7 @@ function handleDrop(event: DragEvent, instance: DataTable, targetOriginalIndex: 
     // -------------
     
     console.log('[Drop] Calculated New Order:', newOrder);
-    instance.stateManager.setColumnOrder(newOrder);
+    instance.state.setColumnOrder(newOrder);
 
     // Émettre l'événement de réorganisation de colonne
     const reorderEvent = new CustomEvent('dt:columnReorder', {
@@ -863,19 +909,10 @@ function handleDrop(event: DragEvent, instance: DataTable, targetOriginalIndex: 
         bubbles: true,
         composed: true
     });
-    // Émettre depuis l'élément principal de la table
-    instance.element.dispatchEvent(reorderEvent); 
+    instance.el.dispatchEvent(reorderEvent);
     console.log(`[Drop] Dispatched dt:columnReorder event with order:`, newOrder);
 
-    // --- AJOUT : Supprimer l'ancien thead pour forcer la recréation ---
-    const table = instance.element.querySelector('table');
-    if (table?.tHead) {
-        table.removeChild(table.tHead);
-        console.log('[Drop] Removed existing thead to force recreation.');
-    }
-    // ----------------------------------------------------------------
-
-    instance.render(); // Re-rendre pour appliquer le nouvel ordre
+    instance.render(newOrder); // <--- Passer le nouvel ordre explicitement
 
     // handleDragEnd sera appelé automatiquement par le navigateur pour nettoyer le style de l'élément glissé
 }
@@ -930,45 +967,65 @@ export function updateSortIndicatorSVG(svgElement: SVGSVGElement | null, parentT
  * Updates the existing THEAD if possible, otherwise creates a new one.
  * @param instance The DataTable instance.
  * @param table The TABLE element.
+ * @param columnOrderOverride Optional column order to use instead of state.
  */
-export function renderHeader(instance: DataTable, table: HTMLTableElement): void {
-    const state = instance.stateManager;
+export function renderHeader(instance: DataTable, table: HTMLTableElement, columnOrderOverride?: number[]): void {
+    console.log(`[renderHeader START] Called. Order override: ${JSON.stringify(columnOrderOverride)}`);
+
+    // Log 1b: Check state manager existence
+    if (!instance.state) {
+        console.error("[renderHeader CRITICAL ERROR] instance.state is UNDEFINED or NULL!");
+        // Optional: throw new Error("State manager is not available in renderHeader");
+        return; // Stop rendering if state is not available
+    }
+    console.log("[renderHeader] instance.state exists. Proceeding..."); // Log 2
+
+    try { // Ajout d'un bloc try...finally pour le log de fin
+        const state = instance.state;
     let thead = table.tHead;
     let headerRow: HTMLTableRowElement;
 
+        // Log 3: Check if state.getColumnWidths is a function BEFORE calling
+        if (typeof state.getColumnWidths !== 'function') {
+            console.error("[renderHeader CRITICAL ERROR] state.getColumnWidths is NOT a function! State object:", state);
+            return;
+        }
+        console.log("[renderHeader] state.getColumnWidths is a function. About to call it..."); // Log 4
     const columnWidths = state.getColumnWidths();
-    const columnOrder = state.getColumnOrder();
-    const visibleColumns = state.getVisibleColumns(); // <<< Récupérer les colonnes visibles
+        console.log("[renderHeader] state.getColumnWidths() called. Result:", columnWidths); // Log 5
+
+        // Utiliser l'override s'il est fourni, sinon prendre celui de l'état
+        const columnOrder = columnOrderOverride ?? state.getColumnOrder(); 
+        console.log(`[renderHeader] Using column order: ${JSON.stringify(columnOrder)}`); 
+        
+        const visibleColumns = state.getVisibleColumns();
     const currentSortIndexState = state.getSortColumnIndex();
     const currentSortDirectionState = state.getSortDirection();
 
-    // --- Mise à jour ou Création de l'en-tête --- 
-    if (thead && thead.rows.length > 0) {
-        headerRow = thead.rows[0];
-        // En mode mise à jour, on pourrait cacher/afficher les TH existants,
-        // mais recréer est plus simple pour l'instant.
-        thead.innerHTML = ''; // Vider pour recréer
-        headerRow = thead.insertRow(); // Recréer la ligne
-        headerRow.setAttribute('role', 'row');
-    } else {
-        if (thead) table.removeChild(thead); // Supprimer l'ancien vide
+        // Recreate thead and headerRow to ensure clean state
+        if (thead) {
+            console.log("[renderHeader] Removing existing thead."); // Log
+            table.removeChild(thead);
+        }
         thead = table.createTHead();
+        console.log("[renderHeader] Created new thead."); // Log
         thead.className = 'bg-gray-50';
         thead.style.position = 'sticky';
         thead.style.top = '0';
         thead.style.zIndex = '10';
         headerRow = thead.insertRow();
         headerRow.setAttribute('role', 'row');
-    }
-    // --- Colonne Checkbox (si nécessaire) --- 
+
+        // Add Select All Checkbox header cell if needed
     if (state.getSelectionEnabled() && state.getSelectionMode() === 'multiple') {
+            console.log("[renderHeader] Adding select all checkbox column."); // Log
         const thCheckbox = document.createElement('th');
         thCheckbox.scope = 'col';
         thCheckbox.setAttribute('role', 'columnheader');
         thCheckbox.className = 'px-4 py-3 text-center w-12 align-middle border-r border-gray-300';
         thCheckbox.style.boxSizing = 'border-box';
+            
         instance.selectAllCheckbox = document.createElement('input');
-        // ... (configuration selectAllCheckbox et listener) ...
          instance.selectAllCheckbox.type = 'checkbox';
          instance.selectAllCheckbox.className = 'form-checkbox h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500';
          instance.selectAllCheckbox.setAttribute('aria-label', 'Sélectionner toutes les lignes visibles');
@@ -977,23 +1034,25 @@ export function renderHeader(instance: DataTable, table: HTMLTableElement): void
          });
         thCheckbox.appendChild(instance.selectAllCheckbox);
         headerRow.appendChild(thCheckbox);
+
+            // Call updateSelectAllCheckboxState *after* the checkbox is added to the DOM
         updateSelectAllCheckboxState(instance);
-        // Appliquer largeur si sauvegardée
-        const checkboxColWidth = state.getColumnWidths().get(-1); // -1 pour la checkbox
+            
+            // Get width for checkbox column (use a special index like -1?)
+            const checkboxColWidth = columnWidths.get(-1); // Assuming -1 is used for checkbox width
         if (checkboxColWidth) {
             thCheckbox.style.width = `${checkboxColWidth}px`;
-            thCheckbox.style.flexGrow = '0'; 
-            thCheckbox.style.flexShrink = '0';
+                thCheckbox.style.flexGrow = '0'; // Prevent growing
+                thCheckbox.style.flexShrink = '0'; // Prevent shrinking
         }
     }
 
-    // --- Boucle principale sur l'ORDRE des colonnes --- 
+        // Add regular column headers
+        console.log(`[renderHeader] Looping through ${columnOrder.length} columns in order.`); // Log
     columnOrder.forEach(originalIndex => {
-        // >>> CONDITION DE VISIBILITÉ <<< 
         if (!visibleColumns.has(originalIndex)) {
-            return; // Ne pas créer ce TH si la colonne n'est pas visible
+                return; 
         }
-        // >>> FIN CONDITION <<<
         
         const columnDef = instance.options.columns[originalIndex];
         if (!columnDef) {
@@ -1002,40 +1061,47 @@ export function renderHeader(instance: DataTable, table: HTMLTableElement): void
         }
     
         const th = document.createElement('th');
-        // ... (configuration du th: classes, styles, dataset, draggable, etc.) ...
         th.scope = 'col';
         th.setAttribute('role', 'columnheader');
-        th.className = `px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider whitespace-nowrap overflow-hidden text-ellipsis border-r border-gray-300`.trim();
+        th.className = `group px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider whitespace-nowrap overflow-hidden text-ellipsis border-r border-gray-300`.trim();
         th.style.boxSizing = 'border-box';
-        th.style.position = 'relative'; // Pour resizer et potentiellement popups
+        th.style.position = 'relative';
         th.dataset.originalIndex = String(originalIndex);
-        
-        // Application de la largeur (comme avant)
-        const currentWidth = columnWidths.get(originalIndex);
-        if (typeof currentWidth === 'number') {
-            th.style.width = `${currentWidth}px`;
-            th.style.minWidth = `${currentWidth}px`; 
-            th.style.maxWidth = `${currentWidth}px`; 
-        } else if (columnDef.width) {
-            th.style.width = columnDef.width;
-            th.style.minWidth = columnDef.width;
-        } else {
-             th.style.minWidth = '50px'; // Largeur minimale par défaut
-        }
 
-        // Activer Drag & Drop
+        // *** Suppression de la SIMPLIFICATION POUR TEST ***
+        // const titleSpan = document.createElement('span');
+        // titleSpan.textContent = columnDef.title || ''; 
+        // th.appendChild(titleSpan); // Ajout direct du titre
+        // --- Fin de la suppression ---
+        
+        // --- RESTAURATION DRAG & DROP LISTENERS (déjà fait, mais on garde pour être sûr) ---
         th.draggable = true;
         th.addEventListener('dragstart', (e) => handleDragStart(e, originalIndex));
         th.addEventListener('dragover', handleDragOver);
         th.addEventListener('dragleave', handleDragLeave);
         th.addEventListener('drop', (e) => handleDrop(e, instance, originalIndex));
         th.addEventListener('dragend', handleDragEnd);
+        // --- FIN RESTAURATION ---
 
-        // Conteneur interne pour flex layout
+        // --- DÉCOMMENTER LE CODE COMPLEXE --- 
+        // Apply width
+        const currentWidth = columnWidths.get(originalIndex);
+        if (typeof currentWidth === 'number') {
+            th.style.width = `${currentWidth}px`;
+            th.style.minWidth = `${currentWidth}px`;
+            th.style.maxWidth = `${currentWidth}px`;
+        } else if (columnDef.width) {
+            th.style.width = columnDef.width;
+            th.style.minWidth = columnDef.width; 
+        } else {
+            th.style.minWidth = '50px'; 
+        }
+
+        // Cell Content Container (Flexbox for alignment)
         const cellContentContainer = document.createElement('div');
         cellContentContainer.className = 'flex items-center justify-between h-full';
 
-        // Titre
+        // Title Container
         const titleContainer = document.createElement('div');
         titleContainer.className = 'flex items-center';
         const titleSpan = document.createElement('span');
@@ -1043,25 +1109,26 @@ export function renderHeader(instance: DataTable, table: HTMLTableElement): void
         titleContainer.appendChild(titleSpan);
         cellContentContainer.appendChild(titleContainer);
 
-        // Conteneur pour les icônes tri/filtre
+        // Sort & Filter Icons Container
         const sortFilterContainer = document.createElement('div');
         sortFilterContainer.className = 'flex items-center space-x-1';
 
-        // Indicateur de Tri (si colonne triable)
+        // Sort Indicator
         const isSortable = instance.options.sorting?.enabled && columnDef.sortable !== false;
         if (isSortable) {
-             // ... (création et ajout de l'indicateur de tri SVG + listeners click/keydown)
-            th.classList.add('cursor-pointer', 'hover:bg-gray-100', 'transition-colors', 'duration-150');
+            th.classList.add('hover:bg-gray-100', 'transition-colors', 'duration-150');
             th.tabIndex = 0; 
             th.setAttribute('aria-roledescription', 'sortable column header');
 
             const sortIndicatorSpan = document.createElement('span');
             sortIndicatorSpan.className = 'ml-1 dt-sort-indicator inline-block';
-            
             const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-            if (instance.useSpriteSortArrow) {
+            svg.setAttribute('class', 'h-4 w-4 transition-transform duration-150 ease-in-out');
+            svg.setAttribute('aria-hidden', 'true');
+
+            if (instance.spriteAvailable.sortArrow) { 
                 const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
-                const iconId = instance.options.icons?.sortArrow || 'icon-sort-arrow'; 
+                const iconId = instance.options.icons?.sortArrow || 'icon-sort-arrow';
                 use.setAttributeNS('http://www.w3.org/1999/xlink', 'href', `#${iconId}`);
                 svg.appendChild(use);
             } else {
@@ -1072,7 +1139,7 @@ export function renderHeader(instance: DataTable, table: HTMLTableElement): void
                 const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
                 path.setAttribute('stroke-linecap', 'round');
                 path.setAttribute('stroke-linejoin', 'round');
-                path.setAttribute('d', 'M5 15l7-7 7 7');
+                path.setAttribute('d', 'M5 15l7-7 7 7'); 
                 svg.appendChild(path);
             }
             sortIndicatorSpan.appendChild(svg);
@@ -1080,114 +1147,97 @@ export function renderHeader(instance: DataTable, table: HTMLTableElement): void
 
             let initialSortState: 'ascending' | 'descending' | 'none' = 'none';
             if (currentSortIndexState === originalIndex && currentSortDirectionState !== 'none') {
-                initialSortState = currentSortDirectionState === 'asc' ? 'ascending' : 'descending';
+                 initialSortState = currentSortDirectionState === 'asc' ? 'ascending' : 'descending';
             }
             updateSortIndicatorSVG(svg, th, initialSortState);
 
-            // Listener pour le tri
             th.addEventListener('click', (e) => {
                 const targetElement = e.target as HTMLElement;
-                // Empêcher le tri si on clique sur le resizer ou un contrôle de filtre
                 if (!targetElement.closest('.resizer-handle') && !targetElement.closest('.dt-filter-control')) {
                     handleSortClick(instance, originalIndex);
                 }
             });
             th.addEventListener('keydown', (event) => {
-                 if (event.key === 'Enter' || event.key === ' ') {
-                     event.preventDefault();
-                     th.click(); 
-                 }
-             });
+                if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    th.click();
+                }
+            });
         }
 
-        // Bouton de Filtre (si colonne filtrable)
+        // Filter Control
         const isGloballyFilterable = instance.options.columnFiltering?.enabled;
         const filterType = columnDef.filterType;
         if (isGloballyFilterable && filterType && ['text', 'number', 'date', 'multi-select'].includes(filterType)) {
-             // ... (création et ajout du bouton de filtre SVG + listener click pour ouvrir popup) ...
-             const currentFilter = state.getColumnFilters().get(originalIndex);
-             const filterControlContainer = document.createElement('div');
-             filterControlContainer.className = 'dt-filter-control ml-1'; // Classe pour cibler
-             const filterButton = document.createElement('button');
-             filterButton.type = 'button';
-             filterButton.className = `p-1 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500 ${currentFilter ? 'text-indigo-600 hover:text-indigo-800' : 'text-gray-400 hover:text-gray-600'}`;
-             
-             const svgFilter = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-             svgFilter.setAttribute('class', 'h-4 w-4');
-             svgFilter.setAttribute('fill', 'currentColor');
-             
-             if (instance.useSpriteFilter) {
-                 const useFilter = document.createElementNS('http://www.w3.org/2000/svg', 'use');
-                 const iconFilterId = instance.options.icons?.filter || 'icon-filter'; 
-                 useFilter.setAttributeNS('http://www.w3.org/1999/xlink', 'href', `#${iconFilterId}`);
-                 svgFilter.appendChild(useFilter);
-             } else {
-                  svgFilter.setAttribute('viewBox', '0 0 20 20');
-                  const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-                  path.setAttribute('fill-rule', 'evenodd');
-                  path.setAttribute('d', 'M3 3a1 1 0 011-1h12a1 1 0 011 1v3a1 1 0 01-.293.707L13 10.414V17a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6.586L3.293 6.707A1 1 0 013 6V3z');
-                  path.setAttribute('clip-rule', 'evenodd');
-                  svgFilter.appendChild(path);
-             }
-             filterButton.appendChild(svgFilter);
-             filterButton.setAttribute('aria-label', `Options de filtre pour ${columnDef.title}`);
-             filterButton.setAttribute('aria-haspopup', 'true');
-             filterButton.addEventListener('click', (e) => {
-                 e.stopPropagation(); // Empêcher le tri
-                 switch (filterType) {
-                     case 'text': createAdvancedTextFilterPopup(instance, originalIndex, columnDef, currentFilter, filterButton); break;
-                     case 'number': createAdvancedNumberFilterPopup(instance, originalIndex, columnDef, currentFilter, filterButton); break;
-                     case 'date': createAdvancedDateFilterPopup(instance, originalIndex, columnDef, currentFilter, filterButton); break;
-                     case 'multi-select': createMultiSelectFilterPopup(instance, originalIndex, columnDef, currentFilter, filterButton); break;
-                 }
-             });
-             filterControlContainer.appendChild(filterButton);
-             sortFilterContainer.appendChild(filterControlContainer);
-        }
+            const currentFilter = state.getColumnFilters().get(originalIndex);
+            const filterControlContainer = document.createElement('div');
+            filterControlContainer.className = 'dt-filter-control ml-1';
 
-        // Ajouter le conteneur d'icônes s'il contient qqch
-        if (sortFilterContainer.hasChildNodes()) {
-            cellContentContainer.appendChild(sortFilterContainer);
-        }
+            const filterButton = document.createElement('button');
+            filterButton.type = 'button';
+            filterButton.className = `p-1 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500 ${currentFilter ? 'text-indigo-600 hover:text-indigo-800' : 'text-gray-400 hover:text-gray-600'}`;
+            
+            const svgFilter = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+            svgFilter.setAttribute('class', 'h-4 w-4');
+            svgFilter.setAttribute('fill', 'currentColor');
+            svgFilter.setAttribute('aria-hidden', 'true');
 
+            if (instance.spriteAvailable.filter) {
+                const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
+                const iconId = instance.options.icons?.filter || 'icon-filter';
+                use.setAttributeNS('http://www.w3.org/1999/xlink', 'href', `#${iconId}`);
+                svgFilter.appendChild(use);
+            } else {
+                svgFilter.setAttribute('viewBox', '0 0 20 20');
+                const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                path.setAttribute('fill-rule', 'evenodd');
+                path.setAttribute('d', 'M3 3a1 1 0 011-1h12a1 1 0 011 1v3a1 1 0 01-.293.707L13 10.414V15a1 1 0 01-.293.707l-2 2A1 1 0 018 17v-6.586L3.293 6.707A1 1 0 013 6V3z');
+                path.setAttribute('clip-rule', 'evenodd');
+                svgFilter.appendChild(path);
+            }
+            filterButton.appendChild(svgFilter);
+            filterButton.addEventListener('click', (e) => {
+                e.stopPropagation();
+                closeActivePopup();
+                const buttonElement = e.currentTarget as HTMLElement;
+                const currentFilterState = state.getColumnFilters().get(originalIndex);
+                switch (filterType) {
+                    case 'text': createAdvancedTextFilterPopup(instance, originalIndex, columnDef, currentFilterState, buttonElement); break;
+                    case 'number': createAdvancedNumberFilterPopup(instance, originalIndex, columnDef, currentFilterState, buttonElement); break;
+                    case 'date': createAdvancedDateFilterPopup(instance, originalIndex, columnDef, currentFilterState, buttonElement); break;
+                    case 'multi-select': createMultiSelectFilterPopup(instance, originalIndex, columnDef, currentFilterState, buttonElement); break;
+                }
+            });
+            filterControlContainer.appendChild(filterButton);
+            sortFilterContainer.appendChild(filterControlContainer);
+        }
+        
+        cellContentContainer.appendChild(sortFilterContainer);
         th.appendChild(cellContentContainer);
 
-        // Handle de Redimensionnement (si colonne redimensionnable)
-        if (columnDef.resizable === true || (columnDef.resizable !== false && instance.options.resizableColumns)) {
+        // Column Resizer
+        console.log(`[renderHeader] Checking resizableColumns option: ${instance.options.resizableColumns} (Type: ${typeof instance.options.resizableColumns})`);
+        if (instance.options.resizableColumns) {
             const resizer = document.createElement('div');
-            // ... (configuration du resizer + listeners mousedown/dblclick) ...
-            resizer.className = 'absolute top-0 right-0 h-full w-4 cursor-col-resize z-30 resizer-handle'; // Classe pour cibler
-            resizer.style.userSelect = 'none';
-            resizer.style.cursor = 'col-resize';
-            resizer.addEventListener('mousedown', (e) => {
-                 e.stopPropagation(); // Empêcher tri/drag
-                 handleMouseDown(e, instance, originalIndex);
-             });
-             resizer.addEventListener('dblclick', (e) => {
-                 e.stopPropagation(); // Empêcher tri
-                 handleDoubleClickResize(e, instance, originalIndex);
-             });
+            resizer.className = 'resizer-handle absolute top-0 right-0 h-full w-1.5 cursor-col-resize bg-blue-300 opacity-100 transition-opacity duration-150';
+            resizer.style.zIndex = '1';
+            resizer.addEventListener('mousedown', (e) => handleMouseDown(e, instance, originalIndex));
+            resizer.addEventListener('dblclick', (e) => handleDoubleClickResize(e, instance, originalIndex));
             th.appendChild(resizer);
+            // *** LOG AJOUTÉ APRÈS APPENDCHILD ***
+            console.log(`[renderHeader] Resizer handle appended for column index ${originalIndex}. TH child count: ${th.children.length}`);
         }
-
+         // --- FIN DU CODE DÉCOMMENTÉ ---
+        
         headerRow.appendChild(th);
     });
-
-    // --- Colonne Actions (si nécessaire) --- 
-    if (instance.options.rowActions && instance.options.rowActions.length > 0) {
-        const thActions = document.createElement('th');
-        // ... (configuration du thActions) ...
-         thActions.scope = 'col';
-         thActions.setAttribute('role', 'columnheader');
-         thActions.className = 'px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider'; // Pas de bordure droite ici
-         thActions.textContent = instance.options.actionsColumn?.header || 'Actions';
-        headerRow.appendChild(thActions);
-        // Appliquer largeur si sauvegardée
-        const actionsColWidth = state.getColumnWidths().get(-2); // -2 pour les actions
-        if (actionsColWidth) {
-            thActions.style.width = `${actionsColWidth}px`;
-            thActions.style.flexGrow = '0'; 
-            thActions.style.flexShrink = '0';
-        }
+    
+        // Add dummy cell for scrollbar width if needed (usually handled by table-layout: fixed)
+        
+    } catch (error) {
+        console.error("[renderHeader] Uncaught error during header rendering:", error);
+        // Optionally display an error message to the user in the UI
+    } finally {
+        console.log("[renderHeader END]"); // Log de fin
     }
 } 
